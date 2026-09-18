@@ -507,6 +507,14 @@ FUKASIS は、開発者の所属する長野県松本深志高等学校地学會
 
 <br><br><br><br>
 
+
+# 開発の詳細 About this Study
+FUKASISの開発に至るまでの詳細や，技術的な部分は
+[部活の2026年度部誌31頁](https://fksgeoscience.github.io/doc/m45_2026_2.pdf#page=32)
+をご覧ください．
+
+<br><br><br><br>
+
 # お問い合わせ
 質問・相談・不具合の報告などは、**[Twitter@legrs4073](https://x.com/legrs4073)** 又は **[ktgwyi01@gmail.com](mail:ktgwyi01@gmail.com)** 又は **[本repositoryのIssue](https://github.com/legrs/fukasis/issues)** へお気軽にお寄せください。\
 ただし、製作者が大学入試に備えるため2026年度中は更新ができない可能性が高いです(応答はできる限りします)。
