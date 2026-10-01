@@ -306,6 +306,16 @@ public class CsvActivity extends AppCompatActivity{
 
 
     }
+    @Override
+    protected void onResume(){
+        super.onResume();
+        
+    }
+    @Override
+    protected void onPause(){
+        super.onPause();
+    }
+
     // 0次光の位置を自動検出して sb1 に反映する. 画像の解析はバックグラウンドで行う
     private void runAutoFol(Button button) {
         String seq = path_et1.getText().toString().trim();
@@ -359,15 +369,6 @@ public class CsvActivity extends AppCompatActivity{
         });
     }
 
-    @Override
-    protected void onResume(){
-        super.onResume();
-        
-    }
-    @Override
-    protected void onPause(){
-        super.onPause();
-    }
     private final ActivityResultLauncher<Intent> csvPickerLauncher = registerForActivityResult(
             new ActivityResultContracts.StartActivityForResult(),
             result -> {
