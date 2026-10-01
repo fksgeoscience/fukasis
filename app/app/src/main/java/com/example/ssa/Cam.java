@@ -25,6 +25,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Build;
+import android.util.Range;
 import android.util.Size;
 import android.view.Surface;
 import android.view.TextureView;
@@ -78,6 +79,10 @@ public class Cam {
     private int maxW, maxH;
     private float maxZoom; // 8.0
 
+    // 端末ごとの設定 (プレビューの見せ方・カラーフィルタ配列)
+    private DeviceProfile profile;
+    private int cfa = DeviceProfile.CFA_GBRG;
+
     private Activity activity;
 
     // Used to load the 'ssa' library on application startup.
@@ -108,6 +113,8 @@ public class Cam {
     public Cam(Activity activity, String camId, SoundPool soundPool, int alarmSound, int shatterSound) {
         this.activity = activity;
         this.camId = camId;
+        this.profile = DeviceProfiles.current(activity);
+        this.cfa = DeviceProfiles.cfa(activity);
         this.soundPool = soundPool;
         this.alarmSound = alarmSound;
         this.shatterSound = shatterSound;
@@ -118,6 +125,8 @@ public class Cam {
             TextureView tv2) {
         this.activity = activity;
         this.camId = camId;
+        this.profile = DeviceProfiles.current(activity);
+        this.cfa = DeviceProfiles.cfa(activity);
         this.soundPool = soundPool;
         this.alarmSound = alarmSound;
         this.shatterSound = shatterSound;
@@ -334,6 +343,20 @@ public class Cam {
         }
     }
 
+    // カメラが受け付ける範囲に収めた ISO. カメラを開く前はそのまま返す
+    public int clampIso(int iso) {
+        Range<Integer> r = camCharacteristics != null
+                ? camCharacteristics.get(CameraCharacteristics.SENSOR_INFO_SENSITIVITY_RANGE) : null;
+        return r != null ? r.clamp(iso) : iso;
+    }
+
+    // カメラが受け付ける範囲に収めた露出時間 (ns). カメラを開く前はそのまま返す
+    public long clampExposure(long ns) {
+        Range<Long> r = camCharacteristics != null
+                ? camCharacteristics.get(CameraCharacteristics.SENSOR_INFO_EXPOSURE_TIME_RANGE) : null;
+        return r != null ? r.clamp(ns) : ns;
+    }
+
     // iso 50,64,80,100,
     // 125,160,200,250,
     // 320,400,500,640,
@@ -365,7 +388,7 @@ public class Cam {
                 // int cropH = cropW * maxH/maxW;
                 int cropH = sensorRect.height() / 4;
                 int cropX = (sensorRect.width() - cropW) / 2;
-                int cropY = (int) (0.4F * (float) sensorRect.height() - (float) cropH / 2.0F);
+                int cropY = (int) ((float) profile.focusZoomCenterY() * (float) sensorRect.height() - (float) cropH / 2.0F);
 
                 Log.d("a", String.format("%d,%d,%d,%d", cropX, cropY, cropX + cropW, cropY + cropH));
 
@@ -504,8 +527,10 @@ public class Cam {
                 // csv(metadata)
                 try (OutputStream output = activity.getContentResolver().openOutputStream(uriCsv, "wt")) {
 
-                    String metadata = String.format(Locale.US, "%s, %s,  ISO %d, fd %f, %d msec * %d ", sequenceName,
-                            Instant.now().toString(), iso, fd, expo, sequenceLength);
+                    // 後ろの cfa はスペクトル出力が別の端末で行われても Bayer 配列を正しく扱うため
+                    String metadata = String.format(Locale.US, "%s, %s,  ISO %d, fd %f, %d msec * %d , cfa %s, device %s",
+                            sequenceName, Instant.now().toString(), iso, fd, expo, sequenceLength,
+                            DeviceProfile.cfaName(cfa), Build.MODEL);
 
                     output.write(metadata.getBytes("UTF-8"));
                     finishOutput(resolver, uriCsv, valuesCsv, true);
@@ -521,7 +546,7 @@ public class Cam {
                 try (ParcelFileDescriptor pfdTiff = resolver.openFileDescriptor(uriTiff, "wt");
                         ParcelFileDescriptor pfdPng = resolver.openFileDescriptor(uriPng, "wt")) {
                     if (pfdTiff != null && pfdPng != null) {
-                        imgError = saveImg(pfdTiff.getFd(), pfdPng.getFd());
+                        imgError = saveImg(pfdTiff.getFd(), pfdPng.getFd(), cfa);
                     } else {
                         imgError = "画像ファイルを開けません";
                     }
@@ -974,8 +999,9 @@ public class Cam {
         if (zoom == 2) {
             s = 4f;
         }
-        float ratio1 = 3.79668f;
-        float ratio2 = 1.05125f;
+        // プレビューの台形補正 (筐体の中のカメラの向きで決まるので端末ごとに違う)
+        float ratio1 = (float) profile.keystone();
+        float ratio2 = (float) profile.stretch();
         float ratio3 = 0.86667f;
         float w = tv1.getWidth();
         float h = tv1.getHeight();
@@ -1046,5 +1072,5 @@ public class Cam {
     public native String accumulateImg(ByteBuffer buff, int rowStride, int bufferSize);
 
     // public native byte[] processImg(String filepath);
-    public native String saveImg(int fdTiff, int fdPng);
+    public native String saveImg(int fdTiff, int fdPng, int cfa);
 }

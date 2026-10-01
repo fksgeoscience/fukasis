@@ -24,14 +24,10 @@ public struct DeviceProfile: Codable, Equatable, Sendable {
         public var id: String?
         /// "RGGB" など. 書かなければカメラが報告する値
         public var cfa: String?
-        public var iso: Int?
-        public var exposureMs: Double?
 
-        public init(id: String? = nil, cfa: String? = nil, iso: Int? = nil, exposureMs: Double? = nil) {
+        public init(id: String? = nil, cfa: String? = nil) {
             self.id = id
             self.cfa = cfa
-            self.iso = iso
-            self.exposureMs = exposureMs
         }
     }
 

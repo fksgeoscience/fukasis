@@ -61,6 +61,7 @@ public class CsvActivity extends AppCompatActivity{
     float fol;
 
     Uri uri4; // sensitivity curve
+    DeviceProfile profile;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -82,6 +83,10 @@ public class CsvActivity extends AppCompatActivity{
         
         path_et1 = binding.input1;
         path_et2 = binding.input2;
+
+        // 0次光スライダーの範囲は端末ごとに違う
+        profile = DeviceProfiles.current(this);
+        DeviceProfiles.applyRange(sb1, profile.folProgress());
         openBtn.setOnClickListener(new View.OnClickListener(){
             public void onClick(View v){
                 ContentResolver resolver = getContentResolver();
@@ -205,9 +210,10 @@ public class CsvActivity extends AppCompatActivity{
 
                 final Uri imgUri = uri1, calibUri = uri2, metaUri = uri3, sensitUri = uri4;
                 final int folPx = (int) fol;
+                final int cfa = DeviceProfiles.cfa(activity);
                 exportBtn.setEnabled(false);
                 executor.execute(() -> {
-                    String err = exportSpectrum(resolver, seq, imgUri, calibUri, metaUri, sensitUri, folPx);
+                    String err = exportSpectrum(resolver, seq, imgUri, calibUri, metaUri, sensitUri, folPx, cfa);
                     runOnUiThread(() -> {
                         exportBtn.setEnabled(true);
                         Toast.makeText(activity, err.isEmpty() ? "スペクトルを保存しました" : "失敗: " + err, Toast.LENGTH_LONG).show();
@@ -241,7 +247,9 @@ public class CsvActivity extends AppCompatActivity{
     }
 
     // スペクトル CSV を書き出す. 成功時は空文字列, 失敗時はエラーメッセージ
-    private String exportSpectrum(ContentResolver resolver, String seq, Uri imgUri, Uri calibUri, Uri metaUri, Uri sensitUri, int folPx) {
+    // 切り出す範囲・積算する帯は端末プロファイルのもの. Bayer 配列は metadata.csv に記録があればそちらが優先される
+    private String exportSpectrum(ContentResolver resolver, String seq, Uri imgUri, Uri calibUri, Uri metaUri, Uri sensitUri,
+                                  int folPx, int cfa) {
         ContentValues values = new ContentValues();
         Uri outUri = Cam.getUri(activity, "Documents/FUKASIS-app/csv/spectrum/", seq + ".csv", "text/csv", resolver, values);
         if (outUri == null) {
@@ -256,7 +264,8 @@ public class CsvActivity extends AppCompatActivity{
             if (pfd1 == null || pfd2 == null || pfd3 == null || pfd4 == null || pfd5 == null) {
                 err = "ファイルを開けません";
             } else {
-                err = makecsv(pfd1.getFd(), pfd2.getFd(), pfd3.getFd(), pfd4.getFd(), pfd5.getFd(), folPx);
+                err = makecsv(pfd1.getFd(), pfd2.getFd(), pfd3.getFd(), pfd4.getFd(), pfd5.getFd(), folPx,
+                        profile.tMin(), profile.tMax(), profile.bandWidth(), profile.bandCenter(), cfa);
             }
         } catch (IOException | RuntimeException e) {
             e.printStackTrace();
@@ -302,6 +311,7 @@ public class CsvActivity extends AppCompatActivity{
         final int width = (int) imgWidth;
         final int progMin = binding.sb1.getMin();
         final int progMax = binding.sb1.getMax();
+        final int cfa = DeviceProfiles.cfa(this);
         ContentResolver resolver = getContentResolver();
 
         button.setEnabled(false);
@@ -312,7 +322,7 @@ public class CsvActivity extends AppCompatActivity{
             // 校正データ名が空なら一番最近保存した校正データを使う
             final String calibName = needCalibName ? AutoCalibration.latestCalibrationName(resolver) : null;
             try {
-                analysis = AutoCalibration.analyzeSequence(resolver, seq);
+                analysis = AutoCalibration.analyzeSequence(resolver, seq, profile, cfa);
                 progress = SpectrumCalibrator.detectFolProgress(analysis.image, width, progMin, progMax);
             } catch (SpectrumCalibrator.CalibrationException e) {
                 error = e.getMessage();
@@ -346,7 +356,7 @@ public class CsvActivity extends AppCompatActivity{
                 if (uri4 == null) {
                     message.append("\n感度データを OPEN SENSITIVITY DATA で選んでください");
                 }
-                String warning = SpectrumCalibrator.bandOffsetWarning(a.image);
+                String warning = SpectrumCalibrator.bandOffsetWarning(a.image, profile.bandWidth(), profile.bandCenter());
                 if (warning != null) {
                     message.append("\n注意: ").append(warning);
                 }
@@ -376,5 +386,6 @@ public class CsvActivity extends AppCompatActivity{
 
 
     // 成功時は空文字列, 失敗時はエラーメッセージを返す
-    public native String makecsv(int fd1, int fd2, int fd3, int fd4, int fd5, int fol);
+    public native String makecsv(int fd1, int fd2, int fd3, int fd4, int fd5, int fol,
+                                 int tMin, int tMax, int bandWidth, double bandCenter, int cfa);
 }

@@ -9,9 +9,7 @@
       "verified": true,
       "camera": {
         "id": "0",
-        "cfa": "GBRG",
-        "iso": 3200,
-        "exposure_ms": 100
+        "cfa": "GBRG"
       },
       "spectrum": {
         "t_min": 1800,

@@ -232,6 +232,70 @@ public class SpectrumCalibratorTest {
     }
 
     @Test
+    public void bandOffsetWarning_usesProfileBand() {
+        double[] p = new double[10];
+        // 帯を 0.7 の位置に移した端末では, そこを基準にする
+        assertNull(SpectrumCalibrator.bandOffsetWarning(new SpectrumCalibrator.ImageProfile(10, 1000, 700, p), 80, 0.7));
+        assertNotNull(SpectrumCalibrator.bandOffsetWarning(new SpectrumCalibrator.ImageProfile(10, 1000, 500, p), 80, 0.7));
+    }
+
+    @Test
+    public void calibrate_respectsNmPerPxRange() {
+        double[] wl = {405.4, 435.8, 487.7, 546.1, 588.0, 611.6};
+        double[] amp = {400, 300, 500, 600, 200, 900};
+        // 合成データの分散は 0.3 nm/px. 許す範囲から外れていれば対応付けない
+        try {
+            SpectrumCalibrator.calibrate(image(syntheticProfile(wl, amp)), WIDTH, 350, 600, 1800, 2900,
+                    SpectrumCalibrator.DEFAULT_CATALOG, 0.5, 1.0);
+            fail("expected CalibrationException");
+        } catch (SpectrumCalibrator.CalibrationException expected) {
+            // ok
+        }
+    }
+
+    @Test
+    public void estimateGeometry_fromFluorescentLamp() throws Exception {
+        double[] wl = {405.4, 435.8, 487.7, 546.1, 588.0, 611.6, 631.0};
+        double[] amp = {400, 300, 500, 600, 200, 900, 300};
+        SpectrumCalibrator.GeometryEstimate g = SpectrumCalibrator.estimateGeometry(
+                image(syntheticProfile(wl, amp)), SpectrumCalibrator.DEFAULT_CATALOG, 400, 700);
+        assertEquals(FOL, g.folX);
+        assertEquals(FOL_PROGRESS, g.folProgress());
+        assertEquals(0.3, g.match.nmPerPx, 0.005);
+        assertEquals(1400, g.distanceAtMin, 5);
+        assertEquals(2400, g.distanceAtMax, 5);
+        assertEquals(1350, g.tRange()[0], 5);
+        assertEquals(2450, g.tRange()[1], 5);
+        assertArrayEquals(new int[]{300, 600}, g.folProgressRange());
+        assertEquals(1700, g.peakProgressRange()[0], 5);
+        assertEquals(3000, g.peakProgressRange()[1], 5);
+        assertEquals(0.2, g.nmPerPxRange()[0], 0.01);
+        assertEquals(0.45, g.nmPerPxRange()[1], 0.01);
+        assertEquals(0.5, g.bandCenter, 1e-9);
+        assertNull(g.warning());
+
+        // 推定した範囲で, いつもの自動校正が通る (iPhone 版の SpectrumCalibratorTests と同じ)
+        int[] fol = g.folProgressRange();
+        int[] peak = g.peakProgressRange();
+        double[] nm = g.nmPerPxRange();
+        SpectrumCalibrator.CalibrationResult r = SpectrumCalibrator.calibrate(image(syntheticProfile(wl, amp)), WIDTH,
+                fol[0], fol[1], peak[0], peak[1], SpectrumCalibrator.DEFAULT_CATALOG, nm[0], nm[1]);
+        assertEquals(FOL_PROGRESS, r.folProgress);
+    }
+
+    @Test
+    public void estimateGeometry_failsWithoutZerothOrder() {
+        double[] flat = new double[WIDTH];
+        java.util.Arrays.fill(flat, 30);
+        try {
+            SpectrumCalibrator.estimateGeometry(image(flat), SpectrumCalibrator.DEFAULT_CATALOG, 400, 700);
+            fail("expected CalibrationException");
+        } catch (SpectrumCalibrator.CalibrationException expected) {
+            // ok
+        }
+    }
+
+    @Test
     public void imageProfile_parsesNativeResult() {
         SpectrumCalibrator.ImageProfile img = SpectrumCalibrator.ImageProfile.fromNative(new double[]{3, 2, 1, 7, 8, 9});
         assertNotNull(img);

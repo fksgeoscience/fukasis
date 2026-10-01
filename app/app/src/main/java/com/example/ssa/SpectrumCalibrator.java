@@ -428,7 +428,7 @@ public final class SpectrumCalibrator {
         public final int height;
         /** スペクトルの帯が写っている行. 不明なら -1 */
         public final int bandCenterY;
-        /** profile[x] = makecsv と同じ中央 80px 帯の列 x の値 */
+        /** profile[x] = makecsv と同じ帯の列 x の値 */
         public final double[] profile;
 
         public ImageProfile(int width, int height, int bandCenterY, double[] profile) {
@@ -452,25 +452,34 @@ public final class SpectrumCalibrator {
         }
     }
 
-    /** makecsv がスペクトルを積算する帯 (画像中央 80px) の半分の幅 */
+    /** makecsv がスペクトルを積算する帯 (既定は画像中央 80px) の半分の幅 */
     public static final int BAND_HALF_WIDTH = 40;
 
-    /**
-     * スペクトルの帯が makecsv の積算する中央の帯から外れていれば警告文を返す. 問題なければ null.
-     * 分光器が傾いている/ずれていると, 何も言われずに暗いスペクトルが出力されてしまうため.
-     */
+    /** 既定の帯 (画像中央 80px) で {@link #bandOffsetWarning(ImageProfile, int, double)} */
     public static String bandOffsetWarning(ImageProfile img) {
+        return bandOffsetWarning(img, 2 * BAND_HALF_WIDTH, 0.5);
+    }
+
+    /**
+     * スペクトルの帯が makecsv の積算する帯から外れていれば警告文を返す. 問題なければ null.
+     * 分光器が傾いている/ずれていると, 何も言われずに暗いスペクトルが出力されてしまうため.
+     *
+     * @param bandWidth  積算する帯の幅 (端末プロファイルの spectrum.band_width)
+     * @param bandCenter 積算する帯の中心 (画像の高さに対する割合. spectrum.band_center)
+     */
+    public static String bandOffsetWarning(ImageProfile img, int bandWidth, double bandCenter) {
         if (img == null || img.bandCenterY < 0) {
             return null;
         }
-        int offset = img.bandCenterY - img.height / 2;
+        int half = bandWidth / 2;
+        int offset = img.bandCenterY - (int) Math.floor(img.height * bandCenter);
         // 帯の中心が積算範囲の 3/4 より外にあれば, 帯の大部分が積算から漏れている
-        if (Math.abs(offset) <= BAND_HALF_WIDTH * 3 / 4) {
+        if (Math.abs(offset) <= half * 3 / 4) {
             return null;
         }
-        return "スペクトルの帯が画像の中央から" + (offset > 0 ? "下" : "上") + "に " + Math.abs(offset)
-                + " px ずれています (スペクトル出力は中央の " + (2 * BAND_HALF_WIDTH)
-                + " px を使います). 分光器の取り付けを確認してください";
+        return "スペクトルの帯が積算する位置から" + (offset > 0 ? "下" : "上") + "に " + Math.abs(offset)
+                + " px ずれています (スペクトル出力は " + (2 * half)
+                + " px の帯を使います). 分光器の取り付けか端末設定の帯の位置を確認してください";
     }
 
     /**
@@ -524,12 +533,25 @@ public final class SpectrumCalibrator {
     public static CalibrationResult calibrate(ImageProfile img, int imgWidth, int folProgMin, int folProgMax,
                                               int peakProgMin, int peakProgMax, double[] catalog)
             throws CalibrationException {
+        return calibrate(img, imgWidth, folProgMin, folProgMax, peakProgMin, peakProgMax, catalog,
+                MIN_NM_PER_PX, MAX_NM_PER_PX);
+    }
+
+    /**
+     * {@link #calibrate(ImageProfile, int, int, int, int, int, double[])} の分散の範囲を指定する版.
+     *
+     * @param minNmPerPx 許す分散の範囲 (端末プロファイルの calibration.nm_per_px)
+     */
+    public static CalibrationResult calibrate(ImageProfile img, int imgWidth, int folProgMin, int folProgMax,
+                                              int peakProgMin, int peakProgMax, double[] catalog,
+                                              double minNmPerPx, double maxNmPerPx)
+            throws CalibrationException {
         int folProgress = detectFolProgress(img, imgWidth, folProgMin, folProgMax);
         int fol = imgWidth - folProgress;
         // 輝線スライダーで表せる距離の範囲 (d = progress - folProgress)
         Peaks peaks = findPeaksInWindow(img.profile, fol, peakProgMin - folProgress, peakProgMax - folProgress);
         CatalogMatch match = matchCatalog(peaks.distances, peaks.intensities, catalog,
-                MIN_NM_PER_PX, MAX_NM_PER_PX, MAX_FIT_RMS_NM);
+                minNmPerPx, maxNmPerPx, MAX_FIT_RMS_NM);
         if (match == null) {
             throw new CalibrationException("輝線をカタログの波長に対応付けられません (検出 " + peaks.distances.length
                     + " 本). 波長の値を確認するか, 手動で合わせてください");
@@ -544,6 +566,108 @@ public final class SpectrumCalibrator {
         return new CalibrationResult(folProgress, progress, match, peaks.distances.length);
     }
 
+    /**
+     * 蛍光灯の写真から求めた, その端末 (と筐体) でのスペクトルの写り方.
+     * 新しい端末のプロファイルを作るときに使う. iPhone 版 (SpectrumCalibrator.swift) と同じ計算.
+     */
+    public static final class GeometryEstimate {
+        public final int imageWidth;
+        /** 0次光の列 */
+        public final int folX;
+        public final CatalogMatch match;
+        public final int peakCount;
+        /** スペクトルの帯が写っている行 (画像の高さに対する割合). 不明なら NaN */
+        public final double bandCenter;
+        /** wlMin / wlMax nm が写る 0次光からの距離 (直線フィットによる) */
+        public final double distanceAtMin;
+        public final double distanceAtMax;
+
+        GeometryEstimate(int imageWidth, int folX, CatalogMatch match, int peakCount, double bandCenter,
+                         double distanceAtMin, double distanceAtMax) {
+            this.imageWidth = imageWidth;
+            this.folX = folX;
+            this.match = match;
+            this.peakCount = peakCount;
+            this.bandCenter = bandCenter;
+            this.distanceAtMin = distanceAtMin;
+            this.distanceAtMax = distanceAtMax;
+        }
+
+        public int folProgress() {
+            return imageWidth - folX;
+        }
+
+        /** スペクトルを切り出す範囲 {t_min, t_max} (少し余裕をもたせる) */
+        public int[] tRange() {
+            double margin = Math.max(50.0, 0.05 * (distanceAtMax - distanceAtMin));
+            int lo = Math.max(1, (int) Math.floor(distanceAtMin - margin));
+            int hi = Math.min(folX - 1, (int) Math.ceil(distanceAtMax + margin));
+            return new int[]{lo, Math.max(lo + 1, hi)};
+        }
+
+        /** 0次光スライダーの範囲 (筐体の組み立て誤差を見込んで ±150px) */
+        public int[] folProgressRange() {
+            return new int[]{Math.max(1, folProgress() - 150), Math.min(imageWidth - 1, folProgress() + 150)};
+        }
+
+        /** 輝線スライダーの範囲 (0次光がスライダーの範囲のどこにあっても, 出力する波長域の線を合わせられる) */
+        public int[] peakProgressRange() {
+            int[] f = folProgressRange();
+            return new int[]{Math.max(1, f[0] + (int) Math.floor(distanceAtMin)),
+                    Math.min(imageWidth - 1, f[1] + (int) Math.ceil(distanceAtMax))};
+        }
+
+        /** 自動校正で許す分散の範囲 */
+        public double[] nmPerPxRange() {
+            return new double[]{match.nmPerPx / 1.5, match.nmPerPx * 1.5};
+        }
+
+        /** 出力したい波長域が画像からはみ出していれば警告. 問題なければ null */
+        public String warning() {
+            if (distanceAtMax >= folX) {
+                return "長波長側が画像の左端からはみ出しています (分光器の向きか 0次光の位置を確認してください)";
+            }
+            if (distanceAtMin <= 0) {
+                return "短波長側が 0次光に重なっています";
+            }
+            return null;
+        }
+    }
+
+    /** 0次光をこの割合より右から探す (0次光は画像の右側に写るように組み立てる) */
+    public static final double FOL_SEARCH_FROM_FRACTION = 0.6;
+
+    /**
+     * 蛍光灯などの輝線が写った画像から, 0次光の位置・分散・スペクトルの範囲を推定する.
+     * Galaxy S22 用のスライダーの範囲を前提にしないので, 新しい端末のセットアップに使える.
+     */
+    public static GeometryEstimate estimateGeometry(ImageProfile img, double[] catalog, double wlMin, double wlMax)
+            throws CalibrationException {
+        int w = img.width;
+        if (w < 100 || img.profile.length != w) {
+            throw new CalibrationException("画像が小さすぎます");
+        }
+        int fol = estimateFolInRange(img.profile, (int) (w * FOL_SEARCH_FROM_FRACTION), w - 1);
+        double[] sorted = img.profile.clone();
+        Arrays.sort(sorted);
+        double median = sorted[sorted.length / 2];
+        if (fol < 0 || !(img.profile[fol] > 2 * Math.max(median, 0))) {
+            throw new CalibrationException("0次光が見つかりません (画像の右側 "
+                    + Math.round((1 - FOL_SEARCH_FROM_FRACTION) * 100) + "% に明るい点がありません)");
+        }
+        // 0次光のすその広がりを避けて, 画像の左端まで探す
+        int minDist = Math.max(20, w / 20);
+        Peaks peaks = findPeaksInWindow(img.profile, fol, minDist, fol);
+        CatalogMatch match = matchCatalog(peaks.distances, peaks.intensities, catalog, 0.02, 2.0, MAX_FIT_RMS_NM);
+        if (match == null) {
+            throw new CalibrationException("輝線をカタログの波長に対応付けられません (検出 " + peaks.distances.length + " 本)");
+        }
+        double band = img.bandCenterY >= 0 && img.height > 0
+                ? Math.round((double) img.bandCenterY / img.height * 1000) / 1000.0 : Double.NaN;
+        return new GeometryEstimate(w, fol, match, peaks.distances.length, band,
+                (wlMin - match.offsetNm) / match.nmPerPx, (wlMax - match.offsetNm) / match.nmPerPx);
+    }
+
     static {
         try {
             System.loadLibrary("ssa");
@@ -556,8 +680,9 @@ public final class SpectrumCalibrator {
      * 画像を解析して [width, height, bandCenterY, profile[0..width-1]] を返すネイティブ実装 (auto_calib.cpp).
      * {@link ImageProfile#fromNative} で解釈する.
      *
-     * @param fd 画像ファイル (stacked.tif / darked.tif) の file descriptor
+     * @param fd         画像ファイル (stacked.tif / darked.tif) の file descriptor
+     * @param bandWidth  積算する帯の幅, bandCenter: 帯の中心 (高さに対する割合), cfa: DeviceProfile.CFA_*
      * @return 失敗時 null
      */
-    public static native double[] analyzeImageNative(int fd);
+    public static native double[] analyzeImageNative(int fd, int bandWidth, double bandCenter, int cfa);
 }

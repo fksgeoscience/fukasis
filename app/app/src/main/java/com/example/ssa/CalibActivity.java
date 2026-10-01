@@ -46,8 +46,10 @@ public class CalibActivity extends AppCompatActivity{
 
     int[] pos = {0,0};
     float scale = 0.8F;
+    // 表示位置 (画像を開いたときに端末プロファイルのスライダーの範囲から決める. Galaxy S22 では -1200, 350)
     int iv1_ofs = -1200;
     int iv2_ofs = 350;
+    DeviceProfile profile;
     int imgWidth ;
     int imgHeight ;
     int dispWidth1 ;
@@ -107,6 +109,15 @@ public class CalibActivity extends AppCompatActivity{
         
         path_et1 = binding.input1;
         path_et2 = binding.input2;
+
+        // スライダーの範囲は端末ごとに違う (0次光と輝線が写る位置は筐体とカメラで決まる)
+        profile = DeviceProfiles.current(this);
+        int[] folRange = profile.folProgress();
+        int[] peakRange = profile.peakProgress();
+        DeviceProfiles.applyRange(sb1, folRange);
+        for (SeekBar bar : sb) {
+            DeviceProfiles.applyRange(bar, peakRange);
+        }
         openBtn.setOnClickListener(new View.OnClickListener(){
             public void onClick(View v){
                 ContentResolver resolver = getContentResolver();
@@ -159,6 +170,9 @@ public class CalibActivity extends AppCompatActivity{
                     Log.d("a","" + dispHeight);
                     Log.d("a","" + imgWidth);
                     Log.d("a","" + imgHeight);
+                    // 左の画像は輝線スライダーの範囲, 右の画像は 0次光スライダーの範囲の端が見えるようにずらす
+                    iv1_ofs = -(imgWidth - profile.peakProgress()[1] + 100);
+                    iv2_ofs = profile.folProgress()[0];
                     matrix.setScale(scale, scale);
                     matrix.postTranslate(scale*iv1_ofs, -(scale*imgHeight-dispHeight)/2);
                     iv1.setImageMatrix(matrix);
@@ -342,6 +356,8 @@ public class CalibActivity extends AppCompatActivity{
         final int folMax = binding.sb1.getMax();
         final int peakMin = sb[0].getMin();
         final int peakMax = sb[0].getMax();
+        final double[] nmPerPx = profile.nmPerPx();
+        final int cfa = DeviceProfiles.cfa(this);
         ContentResolver resolver = getContentResolver();
 
         button.setEnabled(false);
@@ -351,8 +367,9 @@ public class CalibActivity extends AppCompatActivity{
             AutoCalibration.Analysis analysis = null;
             SpectrumCalibrator.CalibrationResult result = null;
             try {
-                analysis = AutoCalibration.analyzeSequence(resolver, seq);
-                result = SpectrumCalibrator.calibrate(analysis.image, width, folMin, folMax, peakMin, peakMax, catalog);
+                analysis = AutoCalibration.analyzeSequence(resolver, seq, profile, cfa);
+                result = SpectrumCalibrator.calibrate(analysis.image, width, folMin, folMax, peakMin, peakMax, catalog,
+                        nmPerPx[0], nmPerPx[1]);
             } catch (SpectrumCalibrator.CalibrationException e) {
                 error = e.getMessage();
             } catch (RuntimeException e) {
@@ -394,7 +411,7 @@ public class CalibActivity extends AppCompatActivity{
         String message = String.format(Locale.US,
                 "自動検出完了 (%s): 0次光 %d, 輝線 %d 本中 4 本を対応付け, 直線からのずれ %.2f nm. 確認して EXPORT CSV を押してください",
                 analysis.fileName, r.folProgress, r.peakCount, r.match.rmsNm);
-        String warning = SpectrumCalibrator.bandOffsetWarning(analysis.image);
+        String warning = SpectrumCalibrator.bandOffsetWarning(analysis.image, profile.bandWidth(), profile.bandCenter());
         if (warning != null) {
             message += "\n注意: " + warning;
         }

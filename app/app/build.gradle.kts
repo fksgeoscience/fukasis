@@ -53,6 +53,16 @@ android {
     buildFeatures {
         viewBinding = true
     }
+    sourceSets {
+        getByName("main") {
+            // 端末ごとの設定 (リポジトリ直下の profiles/device_profiles.json. iPhone 版と共有)
+            assets.srcDir("../../profiles")
+        }
+        getByName("test") {
+            // DeviceProfileTest で同じファイルを読む
+            resources.srcDir("../../profiles")
+        }
+    }
 }
 
 dependencies {
@@ -68,6 +78,8 @@ dependencies {
     implementation(libs.activity)
     implementation("com.github.PhilJay:MPAndroidChart:v3.1.0")
     testImplementation(libs.junit)
+    // android.jar の org.json は unit test では中身がないので, 本物を使う
+    testImplementation("org.json:json:20240303")
     androidTestImplementation(libs.ext.junit)
     androidTestImplementation(libs.espresso.core)
 }
