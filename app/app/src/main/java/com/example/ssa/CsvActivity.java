@@ -2,6 +2,7 @@
 // Copyright © 2026 Tsuyoshi Kobayashi(legrs4073)
 package com.example.ssa;
 import androidx.activity.result.ActivityResultLauncher;
+import android.widget.Toast;
 import android.content.Intent;
 import androidx.activity.result.contract.ActivityResultContracts;
 import android.app.Activity;
@@ -127,54 +128,7 @@ public class CsvActivity extends AppCompatActivity{
         autoFolBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                String seq = path_et1.getText().toString().trim();
-                if (seq.isEmpty()) {
-                    android.widget.Toast.makeText(activity, "Sequence Nameを入力してください", android.widget.Toast.LENGTH_SHORT).show();
-                    return;
-                }
-                if (imgWidth == 0) {
-                    android.widget.Toast.makeText(activity, "先に open image してください", android.widget.Toast.LENGTH_SHORT).show();
-                    return;
-                }
-                ContentResolver resolver = getContentResolver();
-                Uri collection = MediaStore.Files.getContentUri("external");
-                String filepath = "Documents/FUKASIS-app/imgs/" + seq + "/";
-                String[] names = {"darked.tif", "stacked.tif"};
-                Uri tifUri = null;
-                for (String name : names) {
-                    String sel = MediaStore.MediaColumns.DISPLAY_NAME + "=? AND " + MediaStore.MediaColumns.RELATIVE_PATH + "=?";
-                    String[] args = {name, filepath};
-                    try (Cursor c = resolver.query(collection, new String[]{MediaStore.MediaColumns._ID}, sel, args, null)) {
-                        if (c != null && c.moveToFirst()) {
-                            long id = c.getLong(c.getColumnIndexOrThrow(MediaStore.MediaColumns._ID));
-                            tifUri = ContentUris.withAppendedId(collection, id);
-                            break;
-                        }
-                    }
-                }
-                if (tifUri == null) {
-                    android.widget.Toast.makeText(activity, "tifが見つかりません", android.widget.Toast.LENGTH_SHORT).show();
-                    return;
-                }
-                try (ParcelFileDescriptor pfd = resolver.openFileDescriptor(tifUri, "r")) {
-                    if (pfd == null) {
-                        android.widget.Toast.makeText(activity, "ファイルを開けません", android.widget.Toast.LENGTH_SHORT).show();
-                        return;
-                    }
-                    int folEst = SpectrumCalibrator.detectFolNative(pfd.getFd());
-                    if (folEst < 0) {
-                        android.widget.Toast.makeText(activity, "Fol検出失敗", android.widget.Toast.LENGTH_SHORT).show();
-                        return;
-                    }
-                    int progress = (int) (imgWidth - folEst);
-                    if (progress < 300) progress = 300;
-                    if (progress > 550) progress = 550;
-                    binding.sb1.setProgress(progress);
-                    android.widget.Toast.makeText(activity, "Auto Fol: " + folEst, android.widget.Toast.LENGTH_SHORT).show();
-                } catch (Exception e) {
-                    Log.e("CsvAuto", "auto fol failed", e);
-                    android.widget.Toast.makeText(activity, "Auto失敗: " + e.getMessage(), android.widget.Toast.LENGTH_LONG).show();
-                }
+                runAutoFol(autoFolBtn);
             }
         });
         FloatingActionButton homeButton = binding.homeButton;
@@ -352,6 +306,59 @@ public class CsvActivity extends AppCompatActivity{
 
 
     }
+    // 0次光の位置を自動検出して sb1 に反映する. 画像の解析はバックグラウンドで行う
+    private void runAutoFol(Button button) {
+        String seq = path_et1.getText().toString().trim();
+        if (seq.isEmpty()) {
+            Toast.makeText(activity, "Sequence Nameを入力してください", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (imgWidth == 0) {
+            Toast.makeText(activity, "先に open image してください", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        final int width = (int) imgWidth;
+        final int progMin = binding.sb1.getMin();
+        final int progMax = binding.sb1.getMax();
+        ContentResolver resolver = getContentResolver();
+
+        button.setEnabled(false);
+        AutoCalibration.EXECUTOR.execute(() -> {
+            String error = null;
+            AutoCalibration.Analysis analysis = null;
+            int progress = -1;
+            try {
+                analysis = AutoCalibration.analyzeSequence(resolver, seq);
+                progress = SpectrumCalibrator.detectFolProgress(analysis.image, width, progMin, progMax);
+            } catch (SpectrumCalibrator.CalibrationException e) {
+                error = e.getMessage();
+            } catch (RuntimeException e) {
+                Log.e("CsvAuto", "auto fol failed", e);
+                error = String.valueOf(e.getMessage());
+            }
+            final String err = error;
+            final AutoCalibration.Analysis a = analysis;
+            final int p = progress;
+            runOnUiThread(() -> {
+                if (isDestroyed()) {
+                    return;
+                }
+                button.setEnabled(true);
+                if (err != null) {
+                    Toast.makeText(activity, "自動検出に失敗しました: " + err, Toast.LENGTH_LONG).show();
+                    return;
+                }
+                binding.sb1.setProgress(p);
+                // setProgress は値が変わらないと listener を呼ばないので, fol と線の位置は明示的に反映する
+                fol = imgWidth - p;
+                binding.t1.setText("" + p);
+                binding.line.setX(dispWidth+(-imgWidth + fol)*scale);
+                binding.line.setY(pos[1]-50);
+                Toast.makeText(activity, "0次光を検出しました (" + a.fileName + "): " + p, Toast.LENGTH_SHORT).show();
+            });
+        });
+    }
+
     @Override
     protected void onResume(){
         super.onResume();

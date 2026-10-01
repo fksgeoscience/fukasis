@@ -2,6 +2,8 @@
 // Copyright © 2026 Tsuyoshi Kobayashi(legrs4073)
 package com.example.ssa;
 import java.io.OutputStream;
+import java.util.Locale;
+import android.widget.Toast;
 import android.app.Activity;
 import android.content.ContentValues;
 import android.graphics.Matrix;
@@ -168,92 +170,7 @@ public class CalibActivity extends AppCompatActivity{
         autoCalibBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                String seq = path_et1.getText().toString().trim();
-                if (seq.isEmpty()) {
-                    android.widget.Toast.makeText(activity, "Sequence Nameを入力してください", android.widget.Toast.LENGTH_SHORT).show();
-                    return;
-                }
-                ContentResolver resolver = getContentResolver();
-                Uri collection = MediaStore.Files.getContentUri("external");
-                String filepath = "Documents/FUKASIS-app/imgs/" + seq + "/";
-                String[] tifNames = {"stacked.tif", "darked.tif"};
-                Uri tifUri = null;
-                for (String name : tifNames) {
-                    String sel = MediaStore.MediaColumns.DISPLAY_NAME + "=? AND " + MediaStore.MediaColumns.RELATIVE_PATH + "=?";
-                    String[] args = {name, filepath};
-                    try (Cursor c = resolver.query(collection, new String[]{MediaStore.MediaColumns._ID}, sel, args, null)) {
-                        if (c != null && c.moveToFirst()) {
-                            long id = c.getLong(c.getColumnIndexOrThrow(MediaStore.MediaColumns._ID));
-                            tifUri = ContentUris.withAppendedId(collection, id);
-                            break;
-                        }
-                    }
-                }
-                if (tifUri == null) {
-                    android.widget.Toast.makeText(activity, "stacked.tifが見つかりません", android.widget.Toast.LENGTH_SHORT).show();
-                    return;
-                }
-                if (imgWidth == 0) {
-                    android.widget.Toast.makeText(activity, "先に open image してください", android.widget.Toast.LENGTH_SHORT).show();
-                    return;
-                }
-                try (ParcelFileDescriptor pfd = resolver.openFileDescriptor(tifUri, "r")) {
-                    if (pfd == null) {
-                        android.widget.Toast.makeText(activity, "ファイルを開けません", android.widget.Toast.LENGTH_SHORT).show();
-                        return;
-                    }
-                    int folEst = SpectrumCalibrator.detectFolNative(pfd.getFd());
-                    if (folEst < 0) {
-                        android.widget.Toast.makeText(activity, "Fol検出失敗", android.widget.Toast.LENGTH_SHORT).show();
-                        return;
-                    }
-                    // SeekBar sb1 は fol を表す: fol = imgWidth - progress
-                    int sb1Progress = imgWidth - folEst;
-                    if (sb1Progress < 350) sb1Progress = 350;
-                    if (sb1Progress > 600) sb1Progress = 600;
-                    binding.sb1.setProgress(sb1Progress);
-                    // fol は sb1 リスナーで更新されるため手動でもセット
-                    fol = folEst;
-
-                    String peaksStr = SpectrumCalibrator.detectPeaksNative(pfd.getFd(), folEst);
-                    if (peaksStr == null || peaksStr.isEmpty()) {
-                        android.widget.Toast.makeText(activity, "ピーク検出失敗: 手動で合わせてください", android.widget.Toast.LENGTH_LONG).show();
-                        return;
-                    }
-                    String[] parts = peaksStr.split(",");
-                    int[] peaks = new int[parts.length];
-                    for (int i = 0; i < parts.length; i++) {
-                        peaks[i] = Integer.parseInt(parts[i].trim());
-                    }
-                    if (peaks.length == 0) {
-                        android.widget.Toast.makeText(activity, "ピークが見つかりません", android.widget.Toast.LENGTH_SHORT).show();
-                        return;
-                    }
-                    // 強度は不明なので null、デフォルトカタログで自動選択
-                    double[] catalog = SpectrumCalibrator.DEFAULT_CATALOG;
-                    // EditText に現在入っている波長をカタログとして使う (ユーザが変更している場合を尊重)
-                    try {
-                        double[] custom = new double[4];
-                        for (int i = 0; i < 4; i++) custom[i] = Double.parseDouble(et[i].getText().toString());
-                        catalog = custom;
-                    } catch (Exception ignored) {
-                    }
-                    int[] selected = SpectrumCalibrator.selectBestPeaks(peaks, null, catalog, 4);
-                    if (selected.length < 4) {
-                        android.widget.Toast.makeText(activity, "検出ピークが4本未満: " + peaks.length + "本", android.widget.Toast.LENGTH_LONG).show();
-                    }
-                    // SeekBar sb2..sb5 に反映: progress = imgWidth - x
-                    for (int i = 0; i < Math.min(selected.length, sb.length); i++) {
-                        int prog = imgWidth - selected[i];
-                        if (prog < 1800) prog = 1800;
-                        if (prog > 2900) prog = 2900;
-                        sb[i].setProgress(prog);
-                    }
-                    android.widget.Toast.makeText(activity, "Auto検出完了: fol=" + folEst + " peaks=" + peaksStr, android.widget.Toast.LENGTH_LONG).show();
-                } catch (Exception e) {
-                    Log.e("CalibAuto", "auto detect failed", e);
-                    android.widget.Toast.makeText(activity, "Auto失敗: " + e.getMessage(), android.widget.Toast.LENGTH_LONG).show();
-                }
+                runAutoCalibration(autoCalibBtn);
             }
         });
                 FloatingActionButton homeButton = binding.homeButton;
@@ -363,6 +280,82 @@ public class CalibActivity extends AppCompatActivity{
 
 
     }
+    // 0次光と輝線を自動検出して sb1..sb5 に反映する. 画像の解析はバックグラウンドで行う
+    private void runAutoCalibration(Button button) {
+        String seq = path_et1.getText().toString().trim();
+        if (seq.isEmpty()) {
+            Toast.makeText(activity, "Sequence Nameを入力してください", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (imgWidth == 0) {
+            Toast.makeText(activity, "先に open image してください", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        // EditText に入っている波長をカタログとして使う (ユーザが変更している場合を尊重)
+        double[] catalog = new double[et.length];
+        for (int i = 0; i < et.length; i++) {
+            try {
+                catalog[i] = Double.parseDouble(et[i].getText().toString().trim());
+            } catch (NumberFormatException e) {
+                Toast.makeText(activity, (i + 1) + "番目の波長が数値ではありません", Toast.LENGTH_SHORT).show();
+                return;
+            }
+        }
+        final int width = imgWidth;
+        final int folMin = binding.sb1.getMin();
+        final int folMax = binding.sb1.getMax();
+        final int peakMin = sb[0].getMin();
+        final int peakMax = sb[0].getMax();
+        ContentResolver resolver = getContentResolver();
+
+        button.setEnabled(false);
+        Toast.makeText(activity, "自動検出中…", Toast.LENGTH_SHORT).show();
+        AutoCalibration.EXECUTOR.execute(() -> {
+            String error = null;
+            AutoCalibration.Analysis analysis = null;
+            SpectrumCalibrator.CalibrationResult result = null;
+            try {
+                analysis = AutoCalibration.analyzeSequence(resolver, seq);
+                result = SpectrumCalibrator.calibrate(analysis.image, width, folMin, folMax, peakMin, peakMax, catalog);
+            } catch (SpectrumCalibrator.CalibrationException e) {
+                error = e.getMessage();
+            } catch (RuntimeException e) {
+                Log.e("CalibAuto", "auto detect failed", e);
+                error = String.valueOf(e.getMessage());
+            }
+            final String err = error;
+            final AutoCalibration.Analysis a = analysis;
+            final SpectrumCalibrator.CalibrationResult r = result;
+            runOnUiThread(() -> {
+                if (isDestroyed()) {
+                    return;
+                }
+                button.setEnabled(true);
+                if (err != null) {
+                    Toast.makeText(activity, "自動検出に失敗しました: " + err, Toast.LENGTH_LONG).show();
+                    return;
+                }
+                applyAutoCalibration(a, r);
+            });
+        });
+    }
+
+    private void applyAutoCalibration(AutoCalibration.Analysis analysis, SpectrumCalibrator.CalibrationResult r) {
+        binding.sb1.setProgress(r.folProgress);
+        // setProgress は値が変わらないと listener を呼ばないので, fol と線の位置は明示的に反映する
+        fol = imgWidth - r.folProgress;
+        binding.t1.setText("" + r.folProgress);
+        binding.l1.setX(pos[0]+dispWidth2+(-imgWidth + fol + iv2_ofs)*scale);
+        binding.l1.setY(pos[1]-50);
+        for (int i = 0; i < sb.length; i++) {
+            sb[i].setProgress(r.peakProgress[i]);
+            changesb(i, r.peakProgress[i]);
+        }
+        Toast.makeText(activity, String.format(Locale.US,
+                "自動検出完了 (%s): 0次光 %d, 輝線 %d 本中 4 本を対応付け, 直線からのずれ %.2f nm",
+                analysis.fileName, r.folProgress, r.peakCount, r.match.rmsNm), Toast.LENGTH_LONG).show();
+    }
+
     @Override
     protected void onResume(){
         super.onResume();

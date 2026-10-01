@@ -13,7 +13,12 @@ import java.util.List;
  * 従来は CalibActivity で5本の SeekBar を手動で合わせていたが、
  * このクラスにより 0次光位置(fol)の自動推定と輝線ピークの自動検出・
  * カタログ波長への自動マッチングを提供する。
- * pure Java のため host 側の unit test で検証可能。
+ * 画像のデコードと1次元プロファイルの抽出だけをネイティブ (auto_calib.cpp) で行い、
+ * それ以外は pure Java なので host 側の unit test で検証できる。
+ * </p>
+ * <p>
+ * 座標系: x は画像の列, fol は 0次光の列, 距離 d = fol - x (makecsv の t と同じ).
+ * スライダーの値は imgWidth - x.
  * </p>
  */
 public final class SpectrumCalibrator {
@@ -21,15 +26,37 @@ public final class SpectrumCalibrator {
     private SpectrumCalibrator() {
     }
 
-    /** 蛍光灯の既知輝線カタログ (nm) 435.8(Hg), 546.1(Hg), 576.96(Hg*), 611.6(Hg) */
-    public static final double[] DEFAULT_CATALOG = {435.8, 546.1, 576.96, 611.6};
+    /**
+     * 三波長型蛍光灯の輝線 (nm). CalibActivity の初期値と同じ.
+     * 588.0 はオレンジの輝線2本のうち長波長側 (README 参照).
+     */
+    public static final double[] DEFAULT_CATALOG = {435.8, 546.1, 588.0, 611.6};
 
     /** 代替: 太陽 Fraunhofer 由来の代表線 */
     public static final double[] SOLAR_CATALOG = {430.8, 486.1, 589.3, 656.3};
 
+    /** 分散 (nm/pixel) の探索範囲. makecsv は距離 1800..2800px を 400..700nm (約 0.3 nm/px) と想定している */
+    public static final double MIN_NM_PER_PX = 0.2;
+    public static final double MAX_NM_PER_PX = 0.45;
+    /** カタログとの対応付けで許す直線フィットの残差 (RMS, nm) */
+    public static final double MAX_FIT_RMS_NM = 4.0;
+    /** ピーク検出の相対閾値, ピーク間の最小距離, 平滑化の半径 (pixel) */
+    public static final double PEAK_THRESHOLD = 0.05;
+    public static final int PEAK_MIN_DISTANCE = 12;
+    public static final int SMOOTH_RADIUS = 2;
+    /** カタログ対応付けで組合せを試すピーク数の上限 (強度上位) */
+    public static final int MAX_CANDIDATES = 12;
+
+    /** ユーザに理由を見せるための例外 */
+    public static final class CalibrationException extends Exception {
+        public CalibrationException(String message) {
+            super(message);
+        }
+    }
+
     /**
      * Lagrange 3次補間の分母 i_deno を計算.
-     * native-lib.cpp:371 と同等.
+     * native-lib.cpp (makecsv) と同等.
      */
     public static double[] computeDeno(double[] tRef) {
         int n = tRef.length;
@@ -48,7 +75,7 @@ public final class SpectrumCalibrator {
 
     /**
      * Lagrange補間で pixel位置 t -> 波長 t_p に変換.
-     * native-lib.cpp:658 と同等.
+     * native-lib.cpp (makecsv) と同等.
      */
     public static double lagrangeInterpolate(double t, double[] tRef, double[] cRef, double[] deno) {
         double tp = 0.0;
@@ -67,14 +94,28 @@ public final class SpectrumCalibrator {
         return tp;
     }
 
+    /** 半径 radius の移動平均. Bayer 配列による1画素ごとの段差をならす */
+    public static double[] smooth(double[] s, int radius) {
+        double[] out = new double[s.length];
+        for (int i = 0; i < s.length; i++) {
+            int lo = Math.max(0, i - radius);
+            int hi = Math.min(s.length - 1, i + radius);
+            double sum = 0;
+            for (int j = lo; j <= hi; j++) {
+                sum += s[j];
+            }
+            out[i] = sum / (hi - lo + 1);
+        }
+        return out;
+    }
+
     /**
      * 1次元スペクトルのピーク検出.
-     * 単純な極大 + 閾値 + 最小距離制約. 科学用途では Savitzky-Golay 前処理を
-     * 行うことが望ましいが、ここでは軽量な実装とする.
+     * 単純な極大 + 閾値 + 最小距離制約 (強い方を残す NMS).
      *
-     * @param spectrum 画素ごとの強度 (x=0 が短波長側、fol側が長波長側の想定)
-     * @param threshold 相対閾値 0..1 (最大値に対する割合)。例 0.15
-     * @param minDistance ピーク間最小距離 (pixel)。蛍光灯では 80px 程度
+     * @param spectrum 画素ごとの強度
+     * @param threshold 相対閾値 0..1 (最大値に対する割合)
+     * @param minDistance ピーク間最小距離 (pixel)
      * @return ピーク位置のインデックス配列 (昇順)
      */
     public static int[] detectPeaks(double[] spectrum, double threshold, int minDistance) {
@@ -97,7 +138,8 @@ public final class SpectrumCalibrator {
             double prev = spectrum[i - 1];
             double cur = spectrum[i];
             double next = spectrum[i + 1];
-            if (cur > prev && cur > next && cur > absThresh) {
+            // 平坦な頂上 (cur == next) でも1点は拾えるよう右側は >=
+            if (cur > prev && cur >= next && cur > absThresh) {
                 candidates.add(i);
             }
         }
@@ -131,74 +173,201 @@ public final class SpectrumCalibrator {
         return out;
     }
 
-    /**
-     * 検出ピークをカタログ波長に自動マッチング.
-     * 分散は単調増加と仮定し、ピークをx昇順、カタログを波長昇順でソートして
-     * 最も近い数だけ対応付ける。ピークが多すぎる場合は強度上位を優先。
-     *
-     * @param peakPixels 検出ピークのx座標 (昇順)
-     * @param peakIntensities 対応する強度 (peakPixelsと同じ長さ、null可)
-     * @param catalog 波長カタログ (昇順を想定)
-     * @param expectedCount 期待する対応数 (通常 4)
-     * @return long[expectedCount][2] ではなく、選ばれた peakPixels の部分配列を返す。
-     *         呼び出し側で tRef と cRef を構築すること。
-     */
-    public static int[] selectBestPeaks(int[] peakPixels, double[] peakIntensities,
-                                        double[] catalog, int expectedCount) {
-        if (peakPixels == null || peakPixels.length == 0) {
-            return new int[0];
-        }
-        if (peakPixels.length <= expectedCount) {
-            int[] copy = Arrays.copyOf(peakPixels, peakPixels.length);
-            Arrays.sort(copy);
-            return copy;
-        }
-        // 強度で上位 expectedCount を選ぶ
-        if (peakIntensities != null && peakIntensities.length == peakPixels.length) {
-            List<Integer> indices = new ArrayList<>();
-            for (int i = 0; i < peakPixels.length; i++) {
-                indices.add(i);
-            }
-            Collections.sort(indices, (a, b) -> Double.compare(peakIntensities[b], peakIntensities[a]));
-            List<Integer> selected = new ArrayList<>();
-            for (int i = 0; i < expectedCount; i++) {
-                selected.add(peakPixels[indices.get(i)]);
-            }
-            Collections.sort(selected);
-            int[] out = new int[selected.size()];
-            for (int i = 0; i < selected.size(); i++) {
-                out[i] = selected.get(i);
-            }
-            return out;
-        } else {
-            // 等間隔にサンプリング (単純)
-            int[] sorted = Arrays.copyOf(peakPixels, peakPixels.length);
-            Arrays.sort(sorted);
-            // 端を優先して expectedCount 個を均等に選ぶ
-            int[] out = new int[expectedCount];
-            for (int i = 0; i < expectedCount; i++) {
-                int idx = (int) Math.round((double) i * (sorted.length - 1) / (expectedCount - 1));
-                out[i] = sorted[idx];
-            }
-            Arrays.sort(out);
-            return out;
+    /** 検出したピーク: fol からの距離 (昇順) と強度 */
+    public static final class Peaks {
+        public final double[] distances;
+        public final double[] intensities;
+
+        Peaks(double[] distances, double[] intensities) {
+            this.distances = distances;
+            this.intensities = intensities;
         }
     }
 
     /**
+     * fol からの距離 [minDist, maxDist] の範囲だけでピークを探す.
+     * 0次光そのものや範囲外の線に閾値を引っぱられないよう, 範囲内の最小値を背景として引いてから検出する.
+     */
+    public static Peaks findPeaksInWindow(double[] profile, int fol, int minDist, int maxDist) {
+        int lo = Math.max(1, minDist);
+        int hi = Math.min(maxDist, fol);
+        if (profile == null || fol >= profile.length || hi - lo < 3) {
+            return new Peaks(new double[0], new double[0]);
+        }
+        double[] s = new double[hi - lo + 1];
+        for (int d = lo; d <= hi; d++) {
+            s[d - lo] = profile[fol - d];
+        }
+        s = smooth(s, SMOOTH_RADIUS);
+        double min = Double.POSITIVE_INFINITY;
+        for (double v : s) {
+            min = Math.min(min, v);
+        }
+        for (int i = 0; i < s.length; i++) {
+            s[i] -= min;
+        }
+        int[] idx = detectPeaks(s, PEAK_THRESHOLD, PEAK_MIN_DISTANCE);
+        double[] distances = new double[idx.length];
+        double[] intensities = new double[idx.length];
+        for (int i = 0; i < idx.length; i++) {
+            distances[i] = lo + idx[i];
+            intensities[i] = s[idx[i]];
+        }
+        return new Peaks(distances, intensities);
+    }
+
+    /** カタログとの対応付けの結果 */
+    public static final class CatalogMatch {
+        /** catalog[i] の輝線の fol からの距離 (catalog と同じ順) */
+        public final double[] distances;
+        /** 直線フィット 波長 = offsetNm + nmPerPx * 距離 */
+        public final double nmPerPx;
+        public final double offsetNm;
+        /** フィットの残差 (RMS, nm) */
+        public final double rmsNm;
+
+        CatalogMatch(double[] distances, double nmPerPx, double offsetNm, double rmsNm) {
+            this.distances = distances;
+            this.nmPerPx = nmPerPx;
+            this.offsetNm = offsetNm;
+            this.rmsNm = rmsNm;
+        }
+    }
+
+    /**
+     * 検出ピークをカタログ波長に自動マッチング.
+     * <p>
+     * 波長は 0次光からの距離にほぼ比例する (長波長ほど遠い). 強度上位のピークから catalog.length 本を
+     * 距離の昇順に選ぶ全組合せについて, 波長の昇順と対応させて直線フィットし,
+     * 分散が [minNmPerPx, maxNmPerPx] に入る中で残差が最小の組を選ぶ.
+     * 輝線の間隔の比で決まるので, 余分な線 (蛍光灯の Tb/Eu の線など) が混じっていても正しい組を選べる.
+     * </p>
+     *
+     * @param peakDistances   検出ピークの fol からの距離
+     * @param peakIntensities 対応する強度 (null 可. null なら全ピークを候補にする)
+     * @param catalog         波長カタログ (順不同可)
+     * @return 対応付け. 条件を満たす組がなければ null
+     */
+    public static CatalogMatch matchCatalog(double[] peakDistances, double[] peakIntensities, double[] catalog,
+                                            double minNmPerPx, double maxNmPerPx, double maxRmsNm) {
+        int n = catalog == null ? 0 : catalog.length;
+        if (n < 2 || peakDistances == null || peakDistances.length < n) {
+            return null;
+        }
+        // カタログを波長順に (重複があれば対応付けできない)
+        Integer[] catOrder = new Integer[n];
+        for (int i = 0; i < n; i++) {
+            catOrder[i] = i;
+        }
+        Arrays.sort(catOrder, (a, b) -> Double.compare(catalog[a], catalog[b]));
+        double[] wl = new double[n];
+        for (int i = 0; i < n; i++) {
+            wl[i] = catalog[catOrder[i]];
+            if (i > 0 && wl[i] == wl[i - 1]) {
+                return null;
+            }
+        }
+
+        // 候補: 強度上位 MAX_CANDIDATES 本を距離順に
+        Integer[] order = new Integer[peakDistances.length];
+        for (int i = 0; i < order.length; i++) {
+            order[i] = i;
+        }
+        if (peakIntensities != null && peakIntensities.length == peakDistances.length) {
+            Arrays.sort(order, (a, b) -> Double.compare(peakIntensities[b], peakIntensities[a]));
+        }
+        int m = Math.min(order.length, Math.max(MAX_CANDIDATES, n));
+        double[] cand = new double[m];
+        double[] candIntensity = new double[m];
+        Integer[] byDistance = Arrays.copyOf(order, m);
+        Arrays.sort(byDistance, (a, b) -> Double.compare(peakDistances[a], peakDistances[b]));
+        for (int i = 0; i < m; i++) {
+            cand[i] = peakDistances[byDistance[i]];
+            candIntensity[i] = peakIntensities != null && peakIntensities.length == peakDistances.length
+                    ? peakIntensities[byDistance[i]] : 0;
+        }
+
+        int[] pick = new int[n];
+        double[] best = null; // {rms, slope, offset, intensitySum}
+        int[] bestPick = null;
+        // 距離の昇順に n 本選ぶ組合せを列挙
+        for (int i = 0; i < n; i++) {
+            pick[i] = i;
+        }
+        while (true) {
+            double[] fit = fitLine(cand, pick, wl);
+            if (fit != null && fit[1] >= minNmPerPx && fit[1] <= maxNmPerPx && fit[0] <= maxRmsNm) {
+                double intensitySum = 0;
+                for (int p : pick) {
+                    intensitySum += candIntensity[p];
+                }
+                boolean better = best == null
+                        || fit[0] < best[0] - 1e-9
+                        || (Math.abs(fit[0] - best[0]) <= 1e-9 && intensitySum > best[3]);
+                if (better) {
+                    best = new double[]{fit[0], fit[1], fit[2], intensitySum};
+                    bestPick = pick.clone();
+                }
+            }
+            // 次の組合せ
+            int k = n - 1;
+            while (k >= 0 && pick[k] == m - n + k) {
+                k--;
+            }
+            if (k < 0) {
+                break;
+            }
+            pick[k]++;
+            for (int j = k + 1; j < n; j++) {
+                pick[j] = pick[j - 1] + 1;
+            }
+        }
+        if (bestPick == null) {
+            return null;
+        }
+        double[] distances = new double[n];
+        for (int i = 0; i < n; i++) {
+            distances[catOrder[i]] = cand[bestPick[i]];
+        }
+        return new CatalogMatch(distances, best[1], best[2], best[0]);
+    }
+
+    /** wl[i] = offset + slope * x[pick[i]] の最小二乗. {rms, slope, offset} を返す */
+    private static double[] fitLine(double[] x, int[] pick, double[] wl) {
+        int n = pick.length;
+        double sx = 0, sy = 0, sxx = 0, sxy = 0;
+        for (int i = 0; i < n; i++) {
+            double xi = x[pick[i]];
+            sx += xi;
+            sy += wl[i];
+            sxx += xi * xi;
+            sxy += xi * wl[i];
+        }
+        double den = n * sxx - sx * sx;
+        if (den == 0) {
+            return null;
+        }
+        double slope = (n * sxy - sx * sy) / den;
+        double offset = (sy - slope * sx) / n;
+        double ss = 0;
+        for (int i = 0; i < n; i++) {
+            double r = wl[i] - (offset + slope * x[pick[i]]);
+            ss += r * r;
+        }
+        return new double[]{Math.sqrt(ss / n), slope, offset};
+    }
+
+    /**
      * 校正データの妥当性検証.
-     * tRef が単調、cRef が 400-700nm 内、deno が 0 でないことを確認.
+     * tRef に重複がなく、cRef が 350-750nm 内、deno が 0 でないことを確認.
      */
     public static boolean validateCalibration(double[] tRef, double[] cRef) {
         if (tRef == null || cRef == null || tRef.length != cRef.length || tRef.length < 2) {
             return false;
         }
-        for (int i = 1; i < tRef.length; i++) {
-            if (tRef[i] <= tRef[i - 1]) {
-                // tRef は絶対x座標で単調増加である必要はないが、
-                // 距離表現では単調でなくても Lagrange は成立する。
-                // ここでは重複のみをエラーとする。
-                if (tRef[i] == tRef[i - 1]) {
+        for (int i = 0; i < tRef.length; i++) {
+            for (int k = i + 1; k < tRef.length; k++) {
+                if (tRef[i] == tRef[k]) {
                     return false;
                 }
             }
@@ -218,8 +387,8 @@ public final class SpectrumCalibrator {
     }
 
     /**
-     * 列和から 0次光位置(fol)を推定.
-     * 画像右端付近で最大となる列を探す。colSum は x ごとの輝度積算値.
+     * 列ごとの値から 0次光位置(fol)を推定.
+     * 画像右端付近で最大となる列を探す.
      *
      * @param colSum x ごとの積算値 (長さ = 画像幅)
      * @param searchRightFraction 右端から探索する割合 (例 0.25 = 右25%のみ探索)
@@ -231,44 +400,127 @@ public final class SpectrumCalibrator {
         }
         int w = colSum.length;
         int start = (int) (w * (1.0 - searchRightFraction));
-        if (start < 0) {
-            start = 0;
+        return estimateFolInRange(colSum, start, w - 1);
+    }
+
+    /** x ∈ [xMin, xMax] で値が最大の列を返す. 範囲が空なら -1 */
+    public static int estimateFolInRange(double[] colSum, int xMin, int xMax) {
+        if (colSum == null || colSum.length == 0) {
+            return -1;
         }
-        if (start >= w) {
-            start = w - 1;
+        int lo = Math.max(0, xMin);
+        int hi = Math.min(colSum.length - 1, xMax);
+        if (lo > hi) {
+            return -1;
         }
-        int bestIdx = start;
-        double bestVal = colSum[start];
-        for (int x = start + 1; x < w; x++) {
-            if (colSum[x] > bestVal) {
-                bestVal = colSum[x];
+        int bestIdx = lo;
+        for (int x = lo + 1; x <= hi; x++) {
+            if (colSum[x] > colSum[bestIdx]) {
                 bestIdx = x;
             }
         }
-        // エッジが最大の場合は信頼度低だがそのまま返す
         return bestIdx;
     }
 
-    /**
-     * 校正データから波長テーブルを生成 (テスト・プレビュー用).
-     *
-     * @param tRef pixel位置 (距離表現 fol - x ではなく絶対xでも可だが一貫させること)
-     * @param cRef 対応波長
-     * @param xMin 生成開始x
-     * @param xMax 生成終了x
-     * @return double[2][N] 0:波長, 1:対応x
-     */
-    public static double[][] generateWavelengthTable(double[] tRef, double[] cRef, int xMin, int xMax) {
-        double[] deno = computeDeno(tRef);
-        int n = xMax - xMin + 1;
-        double[] wavelengths = new double[n];
-        double[] xs = new double[n];
-        for (int i = 0; i < n; i++) {
-            int x = xMin + i;
-            wavelengths[i] = lagrangeInterpolate(x, tRef, cRef, deno);
-            xs[i] = x;
+    /** 画像の列プロファイル (analyzeImageNative の結果) */
+    public static final class ImageProfile {
+        public final int width;
+        public final int height;
+        /** スペクトルの帯が写っている行. 不明なら -1 */
+        public final int bandCenterY;
+        /** profile[x] = makecsv と同じ中央 80px 帯の列 x の値 */
+        public final double[] profile;
+
+        public ImageProfile(int width, int height, int bandCenterY, double[] profile) {
+            this.width = width;
+            this.height = height;
+            this.bandCenterY = bandCenterY;
+            this.profile = profile;
         }
-        return new double[][]{wavelengths, xs};
+
+        /** analyzeImageNative の戻り値 [width, height, bandCenterY, profile...] を解釈する. 不正なら null */
+        public static ImageProfile fromNative(double[] raw) {
+            if (raw == null || raw.length < 3) {
+                return null;
+            }
+            int w = (int) raw[0];
+            int h = (int) raw[1];
+            if (w <= 0 || h <= 0 || raw.length != 3 + w) {
+                return null;
+            }
+            return new ImageProfile(w, h, (int) raw[2], Arrays.copyOfRange(raw, 3, raw.length));
+        }
+    }
+
+    /**
+     * 0次光の位置を, スライダーで表せる範囲 (progress ∈ [progMin, progMax], progress = imgWidth - x) から探す.
+     *
+     * @return スライダーの値
+     */
+    public static int detectFolProgress(ImageProfile img, int imgWidth, int progMin, int progMax)
+            throws CalibrationException {
+        if (img.width != imgWidth) {
+            throw new CalibrationException("tif (幅 " + img.width + ") と表示中の画像 (幅 " + imgWidth
+                    + ") の大きさが違います");
+        }
+        int fol = estimateFolInRange(img.profile, imgWidth - progMax, imgWidth - progMin);
+        if (fol < 0) {
+            throw new CalibrationException("0次光を探す範囲が画像の外です");
+        }
+        // 0次光は周りより十分明るいはず. 背景 (中央値) と区別できなければ失敗とする
+        double[] sorted = img.profile.clone();
+        Arrays.sort(sorted);
+        double median = sorted[sorted.length / 2];
+        double peak = img.profile[fol];
+        if (!(peak > 0) || peak <= 2 * Math.max(median, 0)) {
+            throw new CalibrationException("0次光が見つかりません (スライダーの範囲内に明るい点がありません)");
+        }
+        return imgWidth - fol;
+    }
+
+    /** 自動校正の結果 (スライダーの値) */
+    public static final class CalibrationResult {
+        public final int folProgress;
+        /** catalog[i] の輝線のスライダー値 (catalog と同じ順) */
+        public final int[] peakProgress;
+        public final CatalogMatch match;
+        public final int peakCount;
+
+        CalibrationResult(int folProgress, int[] peakProgress, CatalogMatch match, int peakCount) {
+            this.folProgress = folProgress;
+            this.peakProgress = peakProgress;
+            this.match = match;
+            this.peakCount = peakCount;
+        }
+    }
+
+    /**
+     * プロファイルから 0次光と輝線を検出し, catalog の各波長に対応するスライダー値を求める.
+     *
+     * @param folProgMin  0次光スライダーの範囲
+     * @param peakProgMin 輝線スライダーの範囲
+     */
+    public static CalibrationResult calibrate(ImageProfile img, int imgWidth, int folProgMin, int folProgMax,
+                                              int peakProgMin, int peakProgMax, double[] catalog)
+            throws CalibrationException {
+        int folProgress = detectFolProgress(img, imgWidth, folProgMin, folProgMax);
+        int fol = imgWidth - folProgress;
+        // 輝線スライダーで表せる距離の範囲 (d = progress - folProgress)
+        Peaks peaks = findPeaksInWindow(img.profile, fol, peakProgMin - folProgress, peakProgMax - folProgress);
+        CatalogMatch match = matchCatalog(peaks.distances, peaks.intensities, catalog,
+                MIN_NM_PER_PX, MAX_NM_PER_PX, MAX_FIT_RMS_NM);
+        if (match == null) {
+            throw new CalibrationException("輝線をカタログの波長に対応付けられません (検出 " + peaks.distances.length
+                    + " 本). 波長の値を確認するか, 手動で合わせてください");
+        }
+        if (!validateCalibration(match.distances, catalog)) {
+            throw new CalibrationException("校正データが不正です (波長は 350-750nm で, 重複のないように)");
+        }
+        int[] progress = new int[catalog.length];
+        for (int i = 0; i < catalog.length; i++) {
+            progress[i] = folProgress + (int) Math.round(match.distances[i]);
+        }
+        return new CalibrationResult(folProgress, progress, match, peaks.distances.length);
     }
 
     static {
@@ -280,21 +532,11 @@ public final class SpectrumCalibrator {
     }
 
     /**
-     * 0次光位置(fol)を画像から自動推定するネイティブ実装.
-     * stacked.tif / darked.tif の fd を渡す。中央80px帯の列和が最大となる x を返す.
+     * 画像を解析して [width, height, bandCenterY, profile[0..width-1]] を返すネイティブ実装 (auto_calib.cpp).
+     * {@link ImageProfile#fromNative} で解釈する.
      *
-     * @param fd 画像ファイルの file descriptor
-     * @return 推定 fol (0..width-1), 失敗時 -1
+     * @param fd 画像ファイル (stacked.tif / darked.tif) の file descriptor
+     * @return 失敗時 null
      */
-    public static native int detectFolNative(int fd);
-
-    /**
-     * 1次元スペクトルから輝線ピークを自動検出するネイティブ実装.
-     * 内部で makecsv と同様の抽出を行い、極大を検出してカンマ区切りで返す.
-     *
-     * @param fd 画像 fd
-     * @param fol 0次光位置 (detectFolNative の結果). 0以下なら画像右端を fol と見なす
-     * @return 例 "1820,2105,2420,2680" 失敗時 ""、ネイティブ未ロード時は Java フォールバック用に空
-     */
-    public static native String detectPeaksNative(int fd, int fol);
+    public static native double[] analyzeImageNative(int fd);
 }
