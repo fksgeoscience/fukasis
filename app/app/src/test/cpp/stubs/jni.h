@@ -1,6 +1,7 @@
 // host テスト用の最小限の JNI スタブ (native-lib.cpp が使う分だけ)
 #pragma once
 #include <cstdint>
+#include <deque>
 #include <string>
 
 #define JNIEXPORT
@@ -23,11 +24,14 @@ typedef jobject jstring;
 
 struct JNIEnv
 {
+    // 返した jstring はこの JNIEnv が持つ (テスト中は解放しない. 終了時にまとめて解放)
+    std::deque<_jobject> strings;
+
     jstring NewStringUTF(const char *s)
     {
-        jstring o = new _jobject();
-        o->str = s;
-        return o;
+        strings.emplace_back();
+        strings.back().str = s;
+        return &strings.back();
     }
     void *GetDirectBufferAddress(jobject o)
     {
