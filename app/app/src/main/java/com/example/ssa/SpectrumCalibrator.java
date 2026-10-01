@@ -452,6 +452,27 @@ public final class SpectrumCalibrator {
         }
     }
 
+    /** makecsv がスペクトルを積算する帯 (画像中央 80px) の半分の幅 */
+    public static final int BAND_HALF_WIDTH = 40;
+
+    /**
+     * スペクトルの帯が makecsv の積算する中央の帯から外れていれば警告文を返す. 問題なければ null.
+     * 分光器が傾いている/ずれていると, 何も言われずに暗いスペクトルが出力されてしまうため.
+     */
+    public static String bandOffsetWarning(ImageProfile img) {
+        if (img == null || img.bandCenterY < 0) {
+            return null;
+        }
+        int offset = img.bandCenterY - img.height / 2;
+        // 帯の中心が積算範囲の 3/4 より外にあれば, 帯の大部分が積算から漏れている
+        if (Math.abs(offset) <= BAND_HALF_WIDTH * 3 / 4) {
+            return null;
+        }
+        return "スペクトルの帯が画像の中央から" + (offset > 0 ? "下" : "上") + "に " + Math.abs(offset)
+                + " px ずれています (スペクトル出力は中央の " + (2 * BAND_HALF_WIDTH)
+                + " px を使います). 分光器の取り付けを確認してください";
+    }
+
     /**
      * 0次光の位置を, スライダーで表せる範囲 (progress ∈ [progMin, progMax], progress = imgWidth - x) から探す.
      *

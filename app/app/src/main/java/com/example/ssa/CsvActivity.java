@@ -131,6 +131,11 @@ public class CsvActivity extends AppCompatActivity{
                 runAutoFol(autoFolBtn);
             }
         });
+        // 前回使った感度データを自動で選んでおく
+        Uri lastSensitivity = AutoCalibration.restoreSensitivity(this);
+        if (lastSensitivity != null) {
+            showSensitivity(lastSensitivity);
+        }
         FloatingActionButton homeButton = binding.homeButton;
         homeButton.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -324,9 +329,14 @@ public class CsvActivity extends AppCompatActivity{
             return;
         }
         if (imgWidth == 0) {
-            Toast.makeText(activity, "先に open image してください", Toast.LENGTH_SHORT).show();
-            return;
+            // まだ画像を開いていなければ開くところから自動で行う
+            binding.open.performClick();
+            if (imgWidth == 0) {
+                Toast.makeText(activity, seq + " の stacked.jpg が見つかりません", Toast.LENGTH_SHORT).show();
+                return;
+            }
         }
+        final boolean needCalibName = path_et2.getText().toString().trim().isEmpty();
         final int width = (int) imgWidth;
         final int progMin = binding.sb1.getMin();
         final int progMax = binding.sb1.getMax();
@@ -337,6 +347,8 @@ public class CsvActivity extends AppCompatActivity{
             String error = null;
             AutoCalibration.Analysis analysis = null;
             int progress = -1;
+            // 校正データ名が空なら一番最近保存した校正データを使う
+            final String calibName = needCalibName ? AutoCalibration.latestCalibrationName(resolver) : null;
             try {
                 analysis = AutoCalibration.analyzeSequence(resolver, seq);
                 progress = SpectrumCalibrator.detectFolProgress(analysis.image, width, progMin, progMax);
@@ -364,9 +376,27 @@ public class CsvActivity extends AppCompatActivity{
                 binding.t1.setText("" + p);
                 binding.line.setX(dispWidth+(-imgWidth + fol)*scale);
                 binding.line.setY(pos[1]-50);
-                Toast.makeText(activity, "0次光を検出しました (" + a.fileName + "): " + p, Toast.LENGTH_SHORT).show();
+                StringBuilder message = new StringBuilder("0次光を検出しました (" + a.fileName + "): " + p);
+                if (calibName != null && path_et2.getText().toString().trim().isEmpty()) {
+                    path_et2.setText(calibName);
+                    message.append("\n校正データ: ").append(calibName).append(" (最新)");
+                }
+                if (uri4 == null) {
+                    message.append("\n感度データを OPEN SENSITIVITY DATA で選んでください");
+                }
+                String warning = SpectrumCalibrator.bandOffsetWarning(a.image);
+                if (warning != null) {
+                    message.append("\n注意: ").append(warning);
+                }
+                Toast.makeText(activity, message.toString(), Toast.LENGTH_LONG).show();
             });
         });
+    }
+
+    // 感度データを選択済みにして, ボタンにファイル名を出す
+    private void showSensitivity(Uri uri) {
+        uri4 = uri;
+        binding.opencsv.setText("sensitivity: " + AutoCalibration.displayName(getContentResolver(), uri));
     }
 
     private final ActivityResultLauncher<Intent> csvPickerLauncher = registerForActivityResult(
@@ -375,7 +405,8 @@ public class CsvActivity extends AppCompatActivity{
                 if (result.getResultCode() == Activity.RESULT_OK && result.getData() != null) {
                     Uri uri = result.getData().getData();
                     if (uri != null) {
-                        uri4 = uri;
+                        AutoCalibration.rememberSensitivity(this, uri);
+                        showSensitivity(uri);
                     }
                 }
             }

@@ -288,8 +288,12 @@ public class CalibActivity extends AppCompatActivity{
             return;
         }
         if (imgWidth == 0) {
-            Toast.makeText(activity, "先に open image してください", Toast.LENGTH_SHORT).show();
-            return;
+            // まだ画像を開いていなければ開くところから自動で行う
+            binding.open.performClick();
+            if (imgWidth == 0) {
+                Toast.makeText(activity, seq + " の stacked.jpg が見つかりません", Toast.LENGTH_SHORT).show();
+                return;
+            }
         }
         // EditText に入っている波長をカタログとして使う (ユーザが変更している場合を尊重)
         double[] catalog = new double[et.length];
@@ -335,12 +339,12 @@ public class CalibActivity extends AppCompatActivity{
                     Toast.makeText(activity, "自動検出に失敗しました: " + err, Toast.LENGTH_LONG).show();
                     return;
                 }
-                applyAutoCalibration(a, r);
+                applyAutoCalibration(seq, a, r);
             });
         });
     }
 
-    private void applyAutoCalibration(AutoCalibration.Analysis analysis, SpectrumCalibrator.CalibrationResult r) {
+    private void applyAutoCalibration(String seq, AutoCalibration.Analysis analysis, SpectrumCalibrator.CalibrationResult r) {
         binding.sb1.setProgress(r.folProgress);
         // setProgress は値が変わらないと listener を呼ばないので, fol と線の位置は明示的に反映する
         fol = imgWidth - r.folProgress;
@@ -351,9 +355,18 @@ public class CalibActivity extends AppCompatActivity{
             sb[i].setProgress(r.peakProgress[i]);
             changesb(i, r.peakProgress[i]);
         }
-        Toast.makeText(activity, String.format(Locale.US,
-                "自動検出完了 (%s): 0次光 %d, 輝線 %d 本中 4 本を対応付け, 直線からのずれ %.2f nm",
-                analysis.fileName, r.folProgress, r.peakCount, r.match.rmsNm), Toast.LENGTH_LONG).show();
+        // 保存名が空なら観測名をそのまま使う (例: fluorescent_260314_1)
+        if (path_et2.getText().toString().trim().isEmpty()) {
+            path_et2.setText(seq);
+        }
+        String message = String.format(Locale.US,
+                "自動検出完了 (%s): 0次光 %d, 輝線 %d 本中 4 本を対応付け, 直線からのずれ %.2f nm. 確認して EXPORT CSV を押してください",
+                analysis.fileName, r.folProgress, r.peakCount, r.match.rmsNm);
+        String warning = SpectrumCalibrator.bandOffsetWarning(analysis.image);
+        if (warning != null) {
+            message += "\n注意: " + warning;
+        }
+        Toast.makeText(activity, message, Toast.LENGTH_LONG).show();
     }
 
     @Override

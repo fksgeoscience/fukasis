@@ -4,10 +4,15 @@ package com.example.ssa;
 
 import android.content.ContentResolver;
 import android.content.ContentUris;
+import android.content.Context;
+import android.content.Intent;
+import android.content.SharedPreferences;
+import android.content.UriPermission;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.ParcelFileDescriptor;
 import android.provider.MediaStore;
+import android.provider.OpenableColumns;
 import android.util.Log;
 
 import java.io.IOException;
@@ -55,6 +60,74 @@ final class AutoCalibration {
             }
         }
         return null;
+    }
+
+    static final String CALIBDATA_DIR = "Documents/FUKASIS-app/csv/calibdata/";
+
+    /** 一番最近保存された校正データの名前 (拡張子なし). なければ null */
+    static String latestCalibrationName(ContentResolver resolver) {
+        Uri collection = MediaStore.Files.getContentUri("external");
+        String sel = MediaStore.MediaColumns.RELATIVE_PATH + "=? AND " + MediaStore.MediaColumns.DISPLAY_NAME + " LIKE ?";
+        try (Cursor c = resolver.query(collection, new String[]{MediaStore.MediaColumns.DISPLAY_NAME}, sel,
+                new String[]{CALIBDATA_DIR, "%.csv"}, MediaStore.MediaColumns.DATE_MODIFIED + " DESC")) {
+            if (c != null && c.moveToFirst()) {
+                String name = c.getString(0);
+                return name.substring(0, name.length() - ".csv".length());
+            }
+        } catch (RuntimeException e) {
+            Log.e("AutoCalib", "failed to list calibration data", e);
+        }
+        return null;
+    }
+
+    // 感度データは端末内のどこにあるか分からないので, ユーザが選んだ URI を覚えておいて次回も使う
+    private static final String PREFS = "auto_calibration";
+    private static final String KEY_SENSITIVITY = "sensitivity_uri";
+
+    /** 選ばれた感度データを覚える (アプリを再起動しても読めるよう永続的な読み取り権限をもらう) */
+    static void rememberSensitivity(Context context, Uri uri) {
+        try {
+            context.getContentResolver().takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        } catch (SecurityException e) {
+            // 永続化できない提供元のファイル. 今回だけ使う
+            Log.d("AutoCalib", "cannot persist permission for " + uri);
+            return;
+        }
+        prefs(context).edit().putString(KEY_SENSITIVITY, uri.toString()).apply();
+    }
+
+    /** 前回選んだ感度データ. まだ読めるものがなければ null */
+    static Uri restoreSensitivity(Context context) {
+        String saved = prefs(context).getString(KEY_SENSITIVITY, null);
+        if (saved == null) {
+            return null;
+        }
+        Uri uri = Uri.parse(saved);
+        for (UriPermission p : context.getContentResolver().getPersistedUriPermissions()) {
+            if (p.getUri().equals(uri) && p.isReadPermission()) {
+                return uri;
+            }
+        }
+        return null;
+    }
+
+    /** 表示用のファイル名. 取れなければ URI の末尾 */
+    static String displayName(ContentResolver resolver, Uri uri) {
+        try (Cursor c = resolver.query(uri, new String[]{OpenableColumns.DISPLAY_NAME}, null, null, null)) {
+            if (c != null && c.moveToFirst()) {
+                String name = c.getString(0);
+                if (name != null) {
+                    return name;
+                }
+            }
+        } catch (RuntimeException e) {
+            Log.d("AutoCalib", "no display name for " + uri);
+        }
+        return uri.getLastPathSegment();
+    }
+
+    private static SharedPreferences prefs(Context context) {
+        return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
     }
 
     /**

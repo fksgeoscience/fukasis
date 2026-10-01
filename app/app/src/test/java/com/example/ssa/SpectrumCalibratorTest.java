@@ -218,6 +218,20 @@ public class SpectrumCalibratorTest {
     }
 
     @Test
+    public void bandOffsetWarning_onlyWhenBandLeavesCentralStrip() {
+        double[] p = new double[10];
+        // 高さ 1000 の中央は 500. 積算は 460..540
+        assertNull(SpectrumCalibrator.bandOffsetWarning(new SpectrumCalibrator.ImageProfile(10, 1000, 520, p)));
+        assertNull(SpectrumCalibrator.bandOffsetWarning(new SpectrumCalibrator.ImageProfile(10, 1000, -1, p)));
+        String below = SpectrumCalibrator.bandOffsetWarning(new SpectrumCalibrator.ImageProfile(10, 1000, 560, p));
+        assertNotNull(below);
+        assertTrue(below.contains("下") && below.contains("60"));
+        String above = SpectrumCalibrator.bandOffsetWarning(new SpectrumCalibrator.ImageProfile(10, 1000, 400, p));
+        assertNotNull(above);
+        assertTrue(above.contains("上") && above.contains("100"));
+    }
+
+    @Test
     public void imageProfile_parsesNativeResult() {
         SpectrumCalibrator.ImageProfile img = SpectrumCalibrator.ImageProfile.fromNative(new double[]{3, 2, 1, 7, 8, 9});
         assertNotNull(img);
