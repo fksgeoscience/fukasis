@@ -9,3 +9,14 @@
   `cli/tests/golden.rs` の `synth` を参照してください。
 - `strips_le.tif` / `strips_be.tif` は 8×4 の 32bit float の TIFF です (値は `y * 10 + x + 0.5`)。
   1 行 1 ストリップで、IFD がデータの後ろにある形にしてあります。
+
+## 正解データの作り直し
+
+`makecsv` の処理を変えたときは、次のコマンドで `expected_spectrum_*.csv` を作り直し、`cli/` と `web/` のテストが通るように両方の実装を直します。
+
+```bash
+sh testdata/tools/regenerate.sh
+```
+
+`tools/harness.cpp` が、JNI と OpenCV を最小限のスタブに置き換えて `makecsv` をそのまま呼び出します。
+出力範囲を波長で決める版の `makecsv` (`wavelength_calib.h` を使うもの) が必要です。アプリの C++ が別の場所にある場合は `FUKASIS_CPP_DIR` で指定します。
