@@ -16,6 +16,7 @@ cargo build --release
 ```
 
 `cli/target/release/fukasis` (Windows では `fukasis.exe`) ができます。
+`cargo install --path cli` (リポジトリの直下で実行) とすると、`fukasis` コマンドとしてインストールされます。
 GitHub Actions の「PC tools」が動いているリポジトリでは、その実行結果からビルド済みの実行ファイル (Linux / macOS / Windows) も取得できます。
 
 ## 使い方
@@ -90,3 +91,7 @@ cargo test
 ```
 
 アプリの C++ をそのまま動かして作った正解データ (`testdata/`) と出力が一致することを確かめています。
+
+## リリース
+
+crates.io のクレート (`fukasis`) として配布できる形にしてあります (まだ公開していません)。手順は [docs/releasing.md](../docs/releasing.md) にあります。

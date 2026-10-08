@@ -464,6 +464,8 @@ csvは最初の2行にヘッダーがあります。
 
 `Internal_Storage/Documents/FUKASIS-app/`をPCにコピーして使ってください。
 
+配布の準備（GitHub Release / crates.io / npm）については[docs/releasing.md](./docs/releasing.md)を参照してください。
+
 <br><br><br><br>
 
 

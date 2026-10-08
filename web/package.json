@@ -1,0 +1,37 @@
+{
+  "name": "fukasis-web",
+  "version": "0.1.0",
+  "description": "Process spectra captured with FUKASIS-app in the browser (dark subtraction, wavelength calibration, CSV export, graphs). Also usable from Node.js as a library.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/legrs/fukasis.git",
+    "directory": "web"
+  },
+  "homepage": "https://github.com/legrs/fukasis/tree/master/web",
+  "bugs": "https://github.com/legrs/fukasis/issues",
+  "keywords": [
+    "spectroscopy",
+    "astronomy",
+    "spectrum",
+    "calibration",
+    "tiff"
+  ],
+  "main": "js/core.js",
+  "bin": {
+    "fukasis-web": "bin/fukasis-web.js"
+  },
+  "files": [
+    "index.html",
+    "css/",
+    "js/",
+    "bin/"
+  ],
+  "scripts": {
+    "start": "node bin/fukasis-web.js --open",
+    "test": "node --test test/core.test.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

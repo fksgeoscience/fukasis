@@ -27,7 +27,11 @@ jobs:
       - name: Node version
         run: node --version
       - name: Test
-        run: node --test web/test/core.test.js
+        run: node --test web/test/core.test.js web/test/server.test.js
+      # npm に載せる中身を確かめる (公開はしない)
+      - name: Package (dry run)
+        working-directory: web
+        run: npm pack --dry-run
 
   cli:
     name: CLI (${{ matrix.os }})
@@ -48,6 +52,10 @@ jobs:
         run: cargo test --locked
       - name: Build
         run: cargo build --release --locked
+      # crates.io に載せる中身だけでビルドできることを確かめる (公開はしない)
+      - name: Package (dry run)
+        if: matrix.os == 'ubuntu-latest'
+        run: cargo package --locked
       # Rust を入れていない人も使えるよう, ビルドした実行ファイルを成果物として残す
       - name: Upload binary
         uses: actions/upload-artifact@v7

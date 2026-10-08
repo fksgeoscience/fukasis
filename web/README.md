@@ -62,12 +62,44 @@ FUKASIS-app で撮影したデータを、PC のブラウザで処理するた�
 - TIFF は、アプリが書き出す形式 (無圧縮・1 チャンネル・ストリップ形式。32 bit float のほか 8 / 16 / 32 bit 整数、64 bit float) に対応しています。圧縮された TIFF やタイル形式には対応していません。
 - jpg / png は Calibration タブでの位置合わせにだけ使えます (値が 8 bit に丸められているので、スペクトルの出力には使えません)。
 
+## サーバーを立てて開く
+
+`index.html` を直接開く代わりに、この PC の中だけで配信して開くこともできます ([Node.js](https://nodejs.org/) 18 以上)。
+`127.0.0.1` だけで待ち受けるので、ほかの PC からはつながりません。
+
+```bash
+node web/bin/fukasis-web.js --open
+```
+
+`--port <番号>` でポートを指定できます (既定は 8377。使われていれば空いているポートを選びます)。
+
+## Node.js から使う
+
+`js/core.js` は Node.js からも読み込めます。校正データの当てはめやスペクトルの出力を、自分のスクリプトから呼べます。
+
+```js
+const core = require('./web/js/core.js');
+const fs = require('node:fs');
+
+// decodeTiff には ArrayBuffer を渡す
+const bytes = fs.readFileSync('darked.tif');
+const image = core.decodeTiff(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
+const calibration = core.parseCalibration(fs.readFileSync('calib.csv', 'utf8'));
+const sensitivity = core.parseSensitivity(fs.readFileSync('sensit_distr.csv', 'utf8'));
+// 0次光の位置 (px). 分かっていればその値を渡す
+const fol = core.guessZerothOrder(core.bandProfile(image));
+const spectrum = core.extract(image, calibration, sensitivity, fol);
+fs.writeFileSync('spectrum.csv', core.toCsv(spectrum, ''));
+```
+
 ## 開発
 
 依存パッケージはありません。`js/core.js` が計算の本体で、ブラウザと Node.js の両方で動きます。
 
 ```bash
-node --test web/test/core.test.js
+node --test web/test/core.test.js web/test/server.test.js
 ```
+
+npm のパッケージ (`fukasis-web`) として配布できる形にしてあります (まだ公開していません)。リリースの手順は [docs/releasing.md](../docs/releasing.md) にあります。
 
 テストでは、アプリの C++ をそのまま動かして作った正解データ (`testdata/`) と出力が一致することを確かめています。
