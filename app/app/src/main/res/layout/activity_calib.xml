@@ -7,9 +7,14 @@
     android:layout_height="match_parent"
     tools:context=".CalibActivity">
 
+    <ScrollView
+        android:id="@+id/scroll"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
+        android:layout_height="wrap_content"
         android:orientation="vertical"
         android:weightSum="1">
 
@@ -23,7 +28,7 @@
             android:layout_height="46dp"
             android:ems="10"
             android:inputType="text"
-            android:hint="Sequence Name"
+            android:hint="@string/hint_sequence_name"
             tools:layout_editor_absoluteX="16dp"
             tools:layout_editor_absoluteY="54dp" />
         <Space
@@ -36,7 +41,7 @@
             android:layout_height="46dp"
             android:ems="10"
             android:inputType="text"
-            android:hint="Calibration Data Name"
+            android:hint="@string/hint_calibration_data_name"
             tools:layout_editor_absoluteX="30dp"
             tools:layout_editor_absoluteY="54dp" />
         <Space
@@ -46,7 +51,7 @@
             android:id="@+id/open"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="open image"
+            android:text="@string/open_image"
             tools:layout_editor_absoluteX="293dp"
             tools:layout_editor_absoluteY="54dp" />
 
@@ -79,9 +84,24 @@
 
         </LinearLayout>
 
-        <Space
+        <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="20dp" />
+            android:layout_height="30dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+            <TextView
+                android:id="@+id/brightness_txt"
+                android:layout_width="120dp"
+                android:layout_height="wrap_content" />
+            <SeekBar
+                android:id="@+id/brightness_bar"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:min="-20"
+                android:max="40"
+                android:progress="0" />
+        </LinearLayout>
 
 
 
@@ -125,7 +145,7 @@
                 android:layout_weight="0.2"
                 android:inputType="numberDecimal"
                 android:text="435.8"
-                android:hint="nm"
+                android:hint="@string/hint_nm"
                 android:textColor="#FFFFFF"/>
         </LinearLayout>
 
@@ -154,7 +174,7 @@
                 android:layout_weight="0.2"
                 android:inputType="numberDecimal"
                 android:text="546.1"
-                android:hint="nm"
+                android:hint="@string/hint_nm"
                 android:textColor="#FFFFFF"/>
         </LinearLayout>
 
@@ -183,7 +203,7 @@
                 android:layout_weight="0.2"
                 android:inputType="numberDecimal"
                 android:text="588.0"
-                android:hint="nm"
+                android:hint="@string/hint_nm"
                 android:textColor="#FFFFFF"/>
         </LinearLayout>
 
@@ -212,7 +232,7 @@
                 android:layout_weight="0.2"
                 android:inputType="numberDecimal"
                 android:text="611.6"
-                android:hint="nm"
+                android:hint="@string/hint_nm"
                 android:textColor="#FFFFFF"/>
         </LinearLayout>
 
@@ -228,11 +248,13 @@
             android:id="@+id/export"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="export csv"
+            android:text="@string/export_csv"
             tools:layout_editor_absoluteX="263dp"
             tools:layout_editor_absoluteY="657dp" />
 
     </LinearLayout>
+
+    </ScrollView>
 
 
 
@@ -302,7 +324,7 @@
     android:layout_height="wrap_content"
     android:layout_marginEnd="12dp"
     android:layout_marginBottom="32dp"
-    android:contentDescription="BACK"
+    android:contentDescription="@string/back"
     app:srcCompat="@drawable/ic_home" 
     app:layout_constraintBottom_toBottomOf="parent"
     app:fabSize="mini"

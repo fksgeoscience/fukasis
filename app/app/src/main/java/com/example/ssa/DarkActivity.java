@@ -76,7 +76,7 @@ public class DarkActivity extends AppCompatActivity{
                             null)){
                     if(cursor != null && cursor.moveToFirst()){
                         long id = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.MediaColumns._ID));
-                        // exsists
+                        // exists
                         uri1 = ContentUris.withAppendedId(collection, id);
                         Log.d("a","ありましたよっ！");
                     }else{
@@ -97,7 +97,7 @@ public class DarkActivity extends AppCompatActivity{
                             null)){
                     if(cursor != null && cursor.moveToFirst()){
                         long id = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.MediaColumns._ID));
-                        // exsists
+                        // exists
                         uri2 = ContentUris.withAppendedId(collection, id);
                         Log.d("a","ありましたよっ！");
                     }else{

@@ -146,7 +146,7 @@ public class Cam {
             if (cursor != null && cursor.moveToFirst()) {
                 Log.d("a", "ありましたよっ！");
                 long id = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.MediaColumns._ID));
-                // exsists
+                // exists
                 uri = ContentUris.withAppendedId(collection, id);
             } else {
                 Log.d("a", "な、ないです…");
@@ -155,7 +155,7 @@ public class Cam {
         }
 
         if (uri == null) {
-            // does not exsists
+            // does not exist
             values.put(MediaStore.MediaColumns.DISPLAY_NAME, name);
             values.put(MediaStore.MediaColumns.MIME_TYPE, type);
             values.put(MediaStore.MediaColumns.RELATIVE_PATH, path);
@@ -500,7 +500,7 @@ public void startCaptureSession(long expo, int iso, float fd, int qty, String na
             indicator.post(new Runnable() {
                 @Override
                 public void run() {
-                    String message = String.format("Capture Sequence completed!\nSequence: %s, \nExposure: %d ms, ISO: %d, Focus: %f\n%d/%d done",
+                    String message = activity.getString(R.string.status_capture_completed,
                              sequenceName, expo, iso, fd, currentCount, sequenceLength);
                     setStatus(StatusType.SUCCESS, message, captureStatusIcon, indicator);
 
@@ -521,7 +521,7 @@ public void startCaptureSession(long expo, int iso, float fd, int qty, String na
             indicator.post(new Runnable() {
                 @Override
                 public void run() {
-                    String message = String.format("Capturing…\nSequence: %s, \nExposure: %d ms, ISO: %d, Focus: %f\n%d/%d done", sequenceName, expo, iso, fd, currentCount, sequenceLength);
+                    String message = activity.getString(R.string.status_capturing, sequenceName, expo, iso, fd, currentCount, sequenceLength);
                     setStatus(StatusType.LOADING, message, captureStatusIcon, indicator);
 
                 }
@@ -614,7 +614,7 @@ public void startCaptureSession(long expo, int iso, float fd, int qty, String na
                 indicator.post(new Runnable() {
                     @Override
                     public void run() {
-                        String message = String.format("Capturing…\n%s, \n%d ms, %d, %f\n%d/%d done", sequenceName,
+                        String message = activity.getString(R.string.status_capturing, sequenceName,
                                 expo, iso, fd, currentCount, sequenceLength);
                         setStatus(StatusType.LOADING, message, captureStatusIcon, indicator);
                     }
@@ -631,7 +631,7 @@ public void startCaptureSession(long expo, int iso, float fd, int qty, String na
                 indicator.post(new Runnable() {
                     @Override
                     public void run() {
-                        String message = "obtained NULL IMAGE. Please try again.";
+                        String message = activity.getString(R.string.error_null_image);
                         setStatus(StatusType.ERROR, message, captureStatusIcon, indicator);
                         capture();
                     }
@@ -654,19 +654,19 @@ public void startCaptureSession(long expo, int iso, float fd, int qty, String na
         // String selection = MediaStore.MediaColumns.DISPLAY_NAME + "=?";
         // String[] selectionArgs = new String[]{ currentCount + ".dng" };
 
-        //// search whether same file exsists.
+        //// search whether same file exists.
         // try(Cursor c = resolver.query(collection,new
         //// String[]{MediaStore.MediaColumns._ID},selection,selectionArgs,null)){
         // if(c != null && c.moveToFirst()){
         // long id = c.getLong(c.getColumnIndexOrThrow(MediaStore.MediaColumns._ID));
-        // // exsists
+        // // exists
         // uri = ContentUris.withAppendedId(collection, id);
         // }
         // }
         //
 
         // if(uri == null){
-        // // does not exsists
+        // // does not exist
         // ContentValues values = new ContentValues();
         // values.put(MediaStore.MediaColumns.DISPLAY_NAME, currentCount + ".dng");
         // values.put(MediaStore.MediaColumns.MIME_TYPE, "image/x-adobe-dng");

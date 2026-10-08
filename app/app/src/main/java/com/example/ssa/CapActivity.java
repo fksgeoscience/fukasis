@@ -129,9 +129,9 @@ public class CapActivity extends AppCompatActivity {
         SeekBar expoBar = binding.expoBar;
         AppCompatImageView expoLock = binding.expoLock;
         AppCompatImageView lineLock = binding.lineLock;
-        focusTxt.setText("Focus:" + focusBar.getProgress() + "");
-        isoTxt.setText("ISO:" + isoBar.getProgress() + "");
-        expoTxt.setText("Exposure:" + expoBar.getProgress() + "");
+        focusTxt.setText(getString(R.string.focus_format, String.valueOf(focusBar.getProgress())));
+        isoTxt.setText(getString(R.string.iso_format, isoBar.getProgress()));
+        expoTxt.setText(getString(R.string.exposure_progress_format, expoBar.getProgress()));
         Log.v("a", "executed onCreate            a");
 
         switchLine.setOnClickListener(new View.OnClickListener() {
@@ -148,7 +148,7 @@ if (isLine) {
         capBtn.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
                 if(nameText.getText().toString().isEmpty()){
-                    String message = "Please enter a name for the capture sequence.";
+                    String message = getString(R.string.error_enter_sequence_name);
                     Cam.setStatus(Cam.StatusType.ERROR, message, captureStatusIcon, indicator);
                     // Cam.java: setStatusメソッドを使用して、エラーメッセージを表示する
                     return;
@@ -167,12 +167,12 @@ if (isLine) {
         zoomFF.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
                 if (zoom == 0) {
-                    zoomFF.setText("UNZOOM");
+                    zoomFF.setText(R.string.unzoom);
                     zoom = 1;
                     cam.changeValueOfPreview(0, -100, 0, 1);
                 } else {
                     zoom = 0;
-                    zoomFF.setText("ZOOM FOR FOCUSING");
+                    zoomFF.setText(R.string.zoom_for_focusing);
                     cam.changeValueOfPreview(0, -100, 0, 0);
                 }
             }
@@ -180,12 +180,12 @@ if (isLine) {
         zoomFP.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
                 if (zoom == 0) {
-                    zoomFP.setText("UNZOOM");
+                    zoomFP.setText(R.string.unzoom);
                     zoom = 2;
                     cam.transformTextures(2);
                 } else {
                     zoom = 0;
-                    zoomFP.setText("ZOOM FOR POINTING");
+                    zoomFP.setText(R.string.zoom_for_pointing);
                     cam.transformTextures(0);
                 }
             }
@@ -204,7 +204,7 @@ if (isLine) {
             @Override
             public void onProgressChanged(SeekBar seekBar, int i, boolean b) {
                 fd = (float) i / 100.0f;
-                focusTxt.setText("Focus:" + fd + "");
+                focusTxt.setText(getString(R.string.focus_format, String.valueOf(fd)));
 
                 cam.changeValueOfPreview(0, fd, 0, -1);
             }
@@ -227,12 +227,12 @@ if (isLine) {
                     focusBar.setEnabled(false);
                     focusLock.setImageResource(R.drawable.ic_lock);
                     focusLock.setAlpha(0.5f);
-                    Toast.makeText(CapActivity.this, "Focus bar : Locked", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(CapActivity.this, R.string.toast_focus_locked, Toast.LENGTH_SHORT).show();
                 } else {
                     focusBar.setEnabled(true);
                     focusLock.setImageResource(R.drawable.ic_unlock);
                     focusLock.setAlpha(1.0f);
-                    Toast.makeText(CapActivity.this, "Focus bar : Unlocked", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(CapActivity.this, R.string.toast_focus_unlocked, Toast.LENGTH_SHORT).show();
                 }
             }
         });
@@ -336,7 +336,7 @@ if (isLine) {
                         break;
                 }
 
-                isoTxt.setText("ISO:" + iso + "");
+                isoTxt.setText(getString(R.string.iso_format, iso));
                 cam.changeValueOfPreview(iso, -100, 0, -1);
             }
 
@@ -361,7 +361,7 @@ if (isLine) {
                     ms = Math.pow(10.0, -1.3802807343883 + (double) i * 3.38028073439 / 100.0);
                 }
                 // 1. ミリ秒は (long) にせず double のまま表示に使う（例：小数点以下 2 桁）
-                expoTxt.setText(String.format("Exposure: %.2f ms", ms));
+                expoTxt.setText(getString(R.string.exposure_format, ms));
 
                 // 2. ナノ秒（Camera2 API用）は大きな整数になるので (long) にキャストする
                 expo = (long) (ms * 1000000.0);

@@ -94,7 +94,7 @@ public class CsvActivity extends AppCompatActivity{
                             null)){
                     if(cursor != null && cursor.moveToFirst()){
                         long id = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.MediaColumns._ID));
-                        // exsists
+                        // exists
                         uri = ContentUris.withAppendedId(collection, id);
                         Log.d("a","ありましたよっ！");
                     }else{
@@ -168,7 +168,7 @@ public class CsvActivity extends AppCompatActivity{
                             null)){
                     if(cursor != null && cursor.moveToFirst()){
                         long id = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.MediaColumns._ID));
-                        // exsists
+                        // exists
                         uri1 = ContentUris.withAppendedId(collection, id);
                         Log.d("a","ありましたよっ！");
                         isDarked = true;
@@ -186,7 +186,7 @@ public class CsvActivity extends AppCompatActivity{
                                 null)){
                         if(cursor != null && cursor.moveToFirst()){
                             long id = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.MediaColumns._ID));
-                            // exsists
+                            // exists
                             uri1 = ContentUris.withAppendedId(collection, id);
                             Log.d("a","ありましたよっ！");
                         }else{
@@ -209,7 +209,7 @@ public class CsvActivity extends AppCompatActivity{
                             null)){
                     if(cursor != null && cursor.moveToFirst()){
                         long id = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.MediaColumns._ID));
-                        // exsists
+                        // exists
                         uri2 = ContentUris.withAppendedId(collection, id);
                         Log.d("a","ありましたよっ！");
                     }else{
@@ -231,7 +231,7 @@ public class CsvActivity extends AppCompatActivity{
                             null)){
                     if(cursor != null && cursor.moveToFirst()){
                         long id = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.MediaColumns._ID));
-                        // exsists
+                        // exists
                         uri3 = ContentUris.withAppendedId(collection, id);
                         Log.d("a","ありましたよっ！");
                     }else{
@@ -275,6 +275,17 @@ public class CsvActivity extends AppCompatActivity{
                 }catch(IOException e){
                     e.printStackTrace();
                 }
+            }
+        });
+        // スクロールしても線が画像についてくるようにする
+        binding.scroll.setOnScrollChangeListener(new View.OnScrollChangeListener() {
+            @Override
+            public void onScrollChange(View v, int x, int y, int oldX, int oldY) {
+                if(imgWidth == 0){
+                    return;
+                }
+                iv.getLocationOnScreen(pos);
+                line.setY(pos[1]-50);
             }
         });
         sb1.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {

@@ -4,6 +4,8 @@ package com.example.ssa;
 import java.io.OutputStream;
 import android.app.Activity;
 import android.content.ContentValues;
+import android.graphics.ColorMatrix;
+import android.graphics.ColorMatrixColorFilter;
 import android.graphics.Matrix;
 import android.content.ContentUris;
 
@@ -53,6 +55,7 @@ public class CalibActivity extends AppCompatActivity{
     int[] t = {0,0,0,0};
     float[] c = {0,0,0,0};
     SeekBar[] sb;
+    TextView brightnessTxt;
     TextView[] tv;
     EditText[] et;
     FrameLayout[] line;
@@ -63,6 +66,17 @@ public class CalibActivity extends AppCompatActivity{
         Log.d("a", Integer.toString(fol - t[j]));
         line[j].setX((t[j] +iv1_ofs)*scale);
         line[j].setY(pos[1]-50);
+    }
+
+    // プレビュー画像の表示上の明るさを変える (i=10 ごとに2倍)。書き出す校正データには影響しない
+    private void changeBrightness(int i){
+        float gain = (float)Math.pow(2.0, i / 10.0);
+        ColorMatrix cm = new ColorMatrix();
+        cm.setScale(gain, gain, gain, 1.0F);
+        ColorMatrixColorFilter filter = new ColorMatrixColorFilter(cm);
+        iv1.setColorFilter(filter);
+        iv2.setColorFilter(filter);
+        brightnessTxt.setText(getString(R.string.brightness_format, gain));
     }
 
     @Override
@@ -94,6 +108,9 @@ public class CalibActivity extends AppCompatActivity{
         iv1.setScaleType(ImageView.ScaleType.MATRIX);
         iv2 = binding.iv2;
         iv2.setScaleType(ImageView.ScaleType.MATRIX);
+        SeekBar brightnessBar = binding.brightnessBar;
+        brightnessTxt = binding.brightnessTxt;
+        changeBrightness(brightnessBar.getProgress());
 
         
         path_et1 = binding.input1;
@@ -124,7 +141,7 @@ public class CalibActivity extends AppCompatActivity{
                     
                     if(cursor != null && cursor.moveToFirst()){
                         long id = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.MediaColumns._ID));
-                        // exsists
+                        // exists
                         uri = ContentUris.withAppendedId(collection, id);
                         Log.d("a","ありましたよっ！");
                     }else{
@@ -202,6 +219,32 @@ public class CalibActivity extends AppCompatActivity{
                     }
                 }
 
+            }
+        });
+        brightnessBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int i, boolean b) {
+                changeBrightness(i);
+            }
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+            }
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+            }
+        });
+        // スクロールしても線が画像についてくるようにする
+        binding.scroll.setOnScrollChangeListener(new View.OnScrollChangeListener() {
+            @Override
+            public void onScrollChange(View v, int x, int y, int oldX, int oldY) {
+                if(imgWidth == 0){
+                    return;
+                }
+                iv2.getLocationOnScreen(pos);
+                l1.setY(pos[1]-50);
+                for(int j=0; j<4; j++){
+                    line[j].setY(pos[1]-50);
+                }
             }
         });
         sb1.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {

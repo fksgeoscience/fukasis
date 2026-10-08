@@ -134,8 +134,8 @@ public class ViewActivity extends AppCompatActivity {
 
     // 抽出したデータを使ってグラフを画面に表示する
     private void displayChart(List<Entry> entries) {
-        // データセットを作成（"Spectrum"は凡例の表示名）
-        LineDataSet dataSet = new LineDataSet(entries, "Spectrum");
+        // データセットを作成（第2引数は凡例の表示名）
+        LineDataSet dataSet = new LineDataSet(entries, getString(R.string.legend_spectrum));
 
         // 💡 スペクトル描画のための重要なカスタマイズ
         dataSet.setColor(Color.BLUE); // 線の色

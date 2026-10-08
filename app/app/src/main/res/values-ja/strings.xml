@@ -1,0 +1,58 @@
+<resources>
+    <!-- common -->
+    <string name="hint_sequence_name">観測名</string>
+    <string name="hint_calibration_data_name">校正データ名</string>
+    <string name="open_image">画像を開く</string>
+    <string name="export_csv">CSV を出力</string>
+    <string name="back">戻る</string>
+
+    <!-- main -->
+    <string name="menu_capture">撮像</string>
+    <string name="menu_dark">ダーク減算</string>
+    <string name="menu_csv">スペクトル出力</string>
+    <string name="menu_calibration">波長校正</string>
+    <string name="menu_view">スペクトル表示</string>
+    <!-- 切替先の言語名を表示する -->
+    <string name="switch_language">English</string>
+    <string name="toast_storage_access_granted">ストレージフルアクセス権限があります</string>
+
+    <!-- capture -->
+    <string name="focus_label">フォーカス</string>
+    <string name="focus_format">フォーカス:%1$s</string>
+    <string name="exposure_label">露光時間:100 ms</string>
+    <string name="exposure_progress_format">露光時間:%1$d</string>
+    <string name="exposure_format">露光時間: %1$.2f ms</string>
+    <string name="switch_long">長時間</string>
+    <string name="zoom_for_focusing">ピント合わせ用ズーム</string>
+    <string name="zoom_for_pointing">導入用ズーム</string>
+    <string name="unzoom">ズーム解除</string>
+    <string name="label_sequence_name">観測名</string>
+    <string name="hint_name">名前</string>
+    <string name="label_capture_quantity">撮像枚数</string>
+    <string name="capture">撮像</string>
+    <string name="capture_status_icon">撮像の状態</string>
+    <string name="status_idle">状態:</string>
+    <string name="switch_line">スリット線の表示切替</string>
+    <string name="toast_focus_locked">フォーカスバー: ロック</string>
+    <string name="toast_focus_unlocked">フォーカスバー: ロック解除</string>
+    <string name="error_enter_sequence_name">観測名を入力してください。</string>
+    <string name="status_capturing">撮像中…\n観測名: %1$s\n露光時間: %2$d ms, ISO: %3$d, フォーカス: %4$f\n%5$d/%6$d 枚完了</string>
+    <string name="status_capture_completed">撮像が完了しました！\n観測名: %1$s\n露光時間: %2$d ms, ISO: %3$d, フォーカス: %4$f\n%5$d/%6$d 枚完了</string>
+    <string name="error_null_image">画像を取得できませんでした。もう一度お試しください。</string>
+
+    <!-- dark -->
+    <string name="label_light">ライトフレーム</string>
+    <string name="label_dark">ダークフレーム</string>
+    <string name="process">処理を実行</string>
+
+    <!-- csv -->
+    <string name="open_sensitivity_csv">感度データ (.csv) を開く</string>
+
+    <!-- calibration -->
+    <string name="brightness_format">明るさ ×%1$.1f</string>
+
+    <!-- view -->
+    <string name="open_spectrum_csv">スペクトル (.csv) を開く</string>
+    <string name="legend_spectrum">スペクトル</string>
+    <string name="marker_format">波長: %1$s\n強度: %2$s</string>
+</resources>
