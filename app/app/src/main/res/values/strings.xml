@@ -86,6 +86,13 @@
     <string name="status_capturing">Capturing…\nSequence: %1$s\nExposure: %2$d ms, ISO: %3$d, Focus: %4$f\n%5$d/%6$d done</string>
     <string name="status_capture_completed">Capture sequence completed!\nSequence: %1$s\nExposure: %2$d ms, ISO: %3$d, Focus: %4$f\n%5$d/%6$d done</string>
     <string name="error_null_image">Obtained a null image. Please try again.</string>
+    <string name="check_saturation">CHECK SATURATION</string>
+    <string name="status_checking_saturation">Checking saturation with a test shot…</string>
+    <string name="saturation_peaks">Peak in the 1st-order region (100%% = white level)\nR: %1$d%%  G: %2$d%%  B: %3$d%%</string>
+    <string name="saturation_ok">No channel is saturated.</string>
+    <string name="saturation_warning">Saturated: %1$s. Lower the ISO or the exposure time.</string>
+    <string name="saturation_frames_warning">⚠ Saturated frames: %1$d/%2$d</string>
+    <string name="error_saturation_check_failed">Saturation check failed. Please try again.</string>
 
     <!-- dark -->
     <string name="label_light">Light</string>
@@ -98,9 +105,16 @@
     <!-- calibration -->
     <string name="brightness_format">Brightness ×%1$.1f</string>
     <string name="hint_nm" translatable="false">nm</string>
+    <string name="calib_saved">Calibration data saved.</string>
+    <string name="calib_warning_duplicate">Saved, but two or more bars are at the same position. A spectrum cannot be computed from this calibration data.</string>
+    <string name="calib_warning_not_monotonic">Saved, but the wavelength does not change monotonically between 400 and 700 nm. Check the bar positions and wavelengths.</string>
+    <string name="calib_warning_no_output">Saved, but no pixel maps to 400–700 nm with this calibration data. Check the bar positions and wavelengths.</string>
 
     <!-- view -->
     <string name="open_spectrum_csv">open spectrum (.csv)</string>
     <string name="legend_spectrum">Spectrum</string>
     <string name="marker_format">wavelength: %1$s\nintensity: %2$s</string>
+    <string name="exclude_outliers">Hide outliers</string>
+    <string name="spectrum_points_info">%1$d points shown, %2$d excluded</string>
+    <string name="no_valid_data">No valid data to plot.</string>
 </resources>

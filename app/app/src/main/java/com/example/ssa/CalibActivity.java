@@ -30,6 +30,8 @@ import android.widget.SeekBar;
 import android.widget.TextView;
 
 import java.io.IOException;
+import java.util.Locale;
+import android.widget.Toast;
 
 public class CalibActivity extends AppCompatActivity{
 
@@ -200,11 +202,14 @@ public class CalibActivity extends AppCompatActivity{
                         for(int i=0; i<4; i++){
                             c[i] = Float.parseFloat(et[i].getText().toString());
                         }
+                        // t[] 自体を書き換えると, 2回目以降の出力や線の位置がずれてしまう
+                        int[] tRel = new int[4];
                         for(int i=0; i<4; i++){
-                            t[i] = fol - t[i];
+                            tRel[i] = fol - t[i];
                             //folとの相対
                         }
-                        String dat = String.format("%d,%d,%d,%d\n%f,%f,%f,%f",t[0],t[1],t[2],t[3],c[0],c[1],c[2],c[3]);
+                        // 小数点がカンマになる言語設定でも csv が壊れないように Locale を固定
+                        String dat = String.format(Locale.US, "%d,%d,%d,%d\n%f,%f,%f,%f",tRel[0],tRel[1],tRel[2],tRel[3],c[0],c[1],c[2],c[3]);
 
                         output.write(dat.getBytes("UTF-8"));
 
@@ -213,6 +218,23 @@ public class CalibActivity extends AppCompatActivity{
                         resolver.update(uriCsv, valuesCsv, null, null);
 
                         Log.d("a", "csv saved at "+uriCsv.toString());
+
+                        // この校正データでスペクトルが出力できそうかを確かめて知らせる
+                        int message = R.string.calib_saved;
+                        switch(CalibrationValidator.validate(
+                                    new double[]{tRel[0],tRel[1],tRel[2],tRel[3]},
+                                    new double[]{c[0],c[1],c[2],c[3]})){
+                            case CalibrationValidator.DUPLICATE_POSITION:
+                                message = R.string.calib_warning_duplicate;
+                                break;
+                            case CalibrationValidator.NOT_MONOTONIC:
+                                message = R.string.calib_warning_not_monotonic;
+                                break;
+                            case CalibrationValidator.NO_OUTPUT:
+                                message = R.string.calib_warning_no_output;
+                                break;
+                        }
+                        Toast.makeText(activity, message, Toast.LENGTH_LONG).show();
                     }catch(IOException e){
                         e.printStackTrace();
                         resolver.delete(uriCsv, null, null);

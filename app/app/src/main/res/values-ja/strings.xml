@@ -39,6 +39,13 @@
     <string name="status_capturing">撮像中…\n観測名: %1$s\n露光時間: %2$d ms, ISO: %3$d, フォーカス: %4$f\n%5$d/%6$d 枚完了</string>
     <string name="status_capture_completed">撮像が完了しました！\n観測名: %1$s\n露光時間: %2$d ms, ISO: %3$d, フォーカス: %4$f\n%5$d/%6$d 枚完了</string>
     <string name="error_null_image">画像を取得できませんでした。もう一度お試しください。</string>
+    <string name="check_saturation">白飛びチェック</string>
+    <string name="status_checking_saturation">試し撮りで白飛びを確認中…</string>
+    <string name="saturation_peaks">一次光領域のピーク (100%% で白飛び)\nR: %1$d%%  G: %2$d%%  B: %3$d%%</string>
+    <string name="saturation_ok">どのチャンネルも白飛びしていません。</string>
+    <string name="saturation_warning">白飛びしています: %1$s。ISO か露光時間を下げてください。</string>
+    <string name="saturation_frames_warning">⚠ 白飛びしたフレーム: %1$d/%2$d</string>
+    <string name="error_saturation_check_failed">白飛びチェックに失敗しました。もう一度お試しください。</string>
 
     <!-- dark -->
     <string name="label_light">ライトフレーム</string>
@@ -50,9 +57,16 @@
 
     <!-- calibration -->
     <string name="brightness_format">明るさ ×%1$.1f</string>
+    <string name="calib_saved">校正データを保存しました。</string>
+    <string name="calib_warning_duplicate">保存しましたが、同じ位置のバーが 2 つ以上あります。この校正データではスペクトルを計算できません。</string>
+    <string name="calib_warning_not_monotonic">保存しましたが、400〜700 nm の範囲で波長が単調に変化していません。バーの位置と波長を確認してください。</string>
+    <string name="calib_warning_no_output">保存しましたが、この校正データでは 400〜700 nm に対応する画素がありません。バーの位置と波長を確認してください。</string>
 
     <!-- view -->
     <string name="open_spectrum_csv">スペクトル (.csv) を開く</string>
     <string name="legend_spectrum">スペクトル</string>
     <string name="marker_format">波長: %1$s\n強度: %2$s</string>
+    <string name="exclude_outliers">異常値を除外</string>
+    <string name="spectrum_points_info">%1$d 点を表示、%2$d 点を除外</string>
+    <string name="no_valid_data">表示できるデータがありません。</string>
 </resources>

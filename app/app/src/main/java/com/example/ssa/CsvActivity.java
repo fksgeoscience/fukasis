@@ -6,6 +6,8 @@ import android.content.Intent;
 import androidx.activity.result.contract.ActivityResultContracts;
 import android.app.Activity;
 import android.content.ContentValues;
+import android.graphics.ColorMatrix;
+import android.graphics.ColorMatrixColorFilter;
 import android.graphics.Matrix;
 import android.content.ContentUris;
 
@@ -34,6 +36,7 @@ import java.io.IOException;
 public class CsvActivity extends AppCompatActivity{
 
     private ImageView iv;
+    private TextView brightnessTxt;
     private EditText path_et1; //et=EditText
     private EditText path_et2; //et=EditText
 
@@ -49,6 +52,15 @@ public class CsvActivity extends AppCompatActivity{
     float fol;
 
     Uri uri4; // sensitivity curve
+
+    // プレビュー画像の表示上の明るさを変える (i=10 ごとに2倍)。出力するスペクトルには影響しない
+    private void changeBrightness(int i){
+        float gain = (float)Math.pow(2.0, i / 10.0);
+        ColorMatrix cm = new ColorMatrix();
+        cm.setScale(gain, gain, gain, 1.0F);
+        iv.setColorFilter(new ColorMatrixColorFilter(cm));
+        brightnessTxt.setText(getString(R.string.brightness_format, gain));
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -68,6 +80,21 @@ public class CsvActivity extends AppCompatActivity{
         FrameLayout line = binding.line;
         iv = binding.iv;
         iv.setScaleType(ImageView.ScaleType.MATRIX);
+        SeekBar brightnessBar = binding.brightnessBar;
+        brightnessTxt = binding.brightnessTxt;
+        changeBrightness(brightnessBar.getProgress());
+        brightnessBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int i, boolean b) {
+                changeBrightness(i);
+            }
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+            }
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+            }
+        });
 
         
         path_et1 = binding.input1;

@@ -670,10 +670,13 @@ extern "C"
 
             double sensit[4] = {1, 1, 1, 1};
 
-            if (DO_CALIB)
+            // 感度データの範囲外の波長でも配列の外を読まないようにする
+            // (校正がずれて t_p が大きく外れると, 範囲外を読んで異常な値になったり落ちたりする)
+            const int sensit_size = sensit_dat[0].size();
+            if (DO_CALIB && sensit_size >= 2)
             {
-                int vi = 0;
-                while (sensit_dat[0][vi] < t_p)
+                int vi = 1;
+                while (vi < sensit_size - 1 && sensit_dat[0][vi] < t_p)
                 {
                     vi++;
                 }
@@ -714,6 +717,11 @@ extern "C"
 
         // export ===========================
         size = calibrated[0].size();
+        if (max <= 0)
+        {
+            // 0 で割って nan を書き出さないように
+            max = 1;
+        }
 
         for (int i = 0; i < size; i++)
         {

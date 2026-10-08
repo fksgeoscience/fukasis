@@ -108,6 +108,7 @@ public class CapActivity extends AppCompatActivity {
         // !
         Button capBtn = binding.cap;
         Button switchLine = binding.switchLine;
+        Button satBtn = binding.satCheck;
         tv1 = binding.tv1;
         tv2 = binding.tv2;
         captureStatusIcon = binding.captureStatusIcon;
@@ -161,7 +162,22 @@ if (isLine) {
                 // captureボタンの透明度を下げる
                 capBtn.setAlpha(0.5f);
                 capBtn.setEnabled(false);
+                satBtn.setAlpha(0.5f);
+                satBtn.setEnabled(false);
 
+            }
+        });
+        // 今の設定で 1 枚だけ試し撮りして, 一次光の領域が白飛びしていないかを確かめる
+        satBtn.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                if (cam.startSaturationCheck(expo, iso, fd, indicator)) {
+                    Cam.setStatus(Cam.StatusType.LOADING, getString(R.string.status_checking_saturation),
+                            captureStatusIcon, indicator);
+                    capBtn.setAlpha(0.5f);
+                    capBtn.setEnabled(false);
+                    satBtn.setAlpha(0.5f);
+                    satBtn.setEnabled(false);
+                }
             }
         });
         zoomFF.setOnClickListener(new View.OnClickListener() {
