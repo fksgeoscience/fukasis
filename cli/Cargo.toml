@@ -1,0 +1,13 @@
+[package]
+name = "fukasis"
+version = "0.1.0"
+edition = "2021"
+description = "FUKASIS-app で撮影したデータを PC で処理するコマンドラインツール"
+license = "MIT"
+publish = false
+
+# 外部クレートには依存しない (標準ライブラリだけでビルドできる)
+[dependencies]
+
+[profile.release]
+opt-level = 3
