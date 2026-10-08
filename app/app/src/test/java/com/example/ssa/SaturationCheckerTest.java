@@ -110,7 +110,7 @@ public class SaturationCheckerTest {
 
     @Test
     public void firstOrderRegion() {
-        assertArrayEquals(new int[] { 730, 1490, 1980, 1570 }, SaturationChecker.firstOrderRegion(4080, 3060));
+        assertArrayEquals(new int[] { 730, 1490, 2380, 1570 }, SaturationChecker.firstOrderRegion(4080, 3060));
         // 想定より小さいセンサでは横方向は全域
         assertArrayEquals(new int[] { 0, 200, 640, 280 }, SaturationChecker.firstOrderRegion(640, 480));
     }

@@ -26,7 +26,7 @@ public class SaturationChecker {
     static final int BAND_HEIGHT = 80; // 画像中央の横帯の幅 (makecsv の width)
     static final int FOL_OFS_MIN = 300; // csv 画面の 0次光スライダーの範囲
     static final int FOL_OFS_MAX = 550;
-    static final int T_MIN = 1800; // 0次光からの距離の範囲 (makecsv の T_MIN, T_MAX)
+    static final int T_MIN = 1400; // 400 - 700 nm が写る, 0次光からの距離のおおよその範囲
     static final int T_MAX = 2800;
 
     // [配列][(y%2)*2 + x%2] -> チャンネル

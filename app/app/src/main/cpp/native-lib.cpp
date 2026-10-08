@@ -24,6 +24,8 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include "wavelength_calib.h"
+
 #define LOG_TAG "CameraNative"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
@@ -292,13 +294,14 @@ extern "C"
 
         stringstream ss;
 
-        double t_ref[4];
-        double c_ref[4];
-        double i_deno[4];
+        // 波長校正データ. 0次光からの距離 (px) と, そこでの波長 (nm). 4 点以上
+        vector<double> t_ref;
+        vector<double> c_ref;
         vector<double> sensit_dat[5];
 
-        const int T_MIN = 1800;
-        const int T_MAX = 2800;
+        // 出力する波長の範囲 (nm)
+        const double WL_MIN = 400;
+        const double WL_MAX = 700;
 
         // img ----------------------------------------------------------
 
@@ -334,54 +337,31 @@ extern "C"
             return env->NewStringUTF("");
         }
 
+        // 1 行目が位置, 2 行目が波長. 列の数 (= 校正点の数) は 4 以上
         if (fgets(buff, sizeof(buff), file) != nullptr)
         {
-            string dat(buff);
-            stringstream dats(dat);
-
-            string tmp;
-            for (int i = 0; i < 4; i++)
-            {
-                getline(dats, tmp, ',');
-                t_ref[i] = stod(tmp);
-            }
+            t_ref = wlcalib::parseLine(buff);
         }
         else
         {
+            fclose(file);
             return env->NewStringUTF("校正データがない");
         }
         if (fgets(buff, sizeof(buff), file) != nullptr)
         {
-            string dat(buff);
-            stringstream dats(dat);
-
-            string tmp;
-            for (int i = 0; i < 4; i++)
-            {
-                getline(dats, tmp, ',');
-                c_ref[i] = stod(tmp);
-            }
+            c_ref = wlcalib::parseLine(buff);
         }
         else
         {
+            fclose(file);
             return env->NewStringUTF("校正データがない");
         }
         fclose(file);
 
-        for (int j = 0; j < 4; j++)
-        {
-            i_deno[j] = 1.0;
-            for (int k = 0; k < 4; k++)
-            {
-                if (k != j)
-                {
-                    i_deno[j] *= (t_ref[j] - t_ref[k]);
-                }
-            }
-        }
+        // t -> 波長 の対応. 4 点ならその 4 点を通る 3 次式, 5 点以上なら 3 次の最小二乗
+        const wlcalib::Poly wl_fit = wlcalib::fit(t_ref, c_ref);
 
-        LOGI("t_ref : %f , %f , %f , %f", t_ref[0], t_ref[1], t_ref[2], t_ref[3]);
-        LOGI("c_ref : %f , %f , %f , %f", c_ref[0], c_ref[1], c_ref[2], c_ref[3]);
+        LOGI("calibration points : %d , fit ok : %d , degree : %d", (int)t_ref.size(), (int)wl_fit.ok, wl_fit.degree);
 
         // observation infomation --------------------------------------------------------------
 
@@ -612,6 +592,10 @@ extern "C"
         double t, t_p, bgr;
         int size = pure[0].size();
 
+        // 出力する範囲. 画素の固定範囲ではなく波長で決める. 波長が逆行する部分は含めない
+        const wlcalib::Range out_range = wlcalib::outputRange(wl_fit, t_ref, size, WL_MIN, WL_MAX);
+        LOGI("output range : t = %d .. %d (cut %d / %d)", out_range.lo, out_range.hi, (int)out_range.cutLow, (int)out_range.cutHigh);
+
         // bとrの欠落を埋めて、minをget =======================
         for (int i = 1; i < size - 1; i++)
         {
@@ -629,7 +613,7 @@ extern "C"
                 bgr += pure[2][i];
             }
 
-            if (T_MIN < i && i < T_MAX)
+            if (out_range.lo <= i && i <= out_range.hi)
             {
                 if (max < bgr)
                 {
@@ -650,23 +634,10 @@ extern "C"
 
         for (int i = 0; i < size; i++)
         {
-            // langange interpolation | t -> t_p
-            // cubic interpolation
+            // t -> t_p (波長)
             t = i;
             // LOGI("%s",to_string(t).c_str());
-            t_p = 0;
-            for (int j = 0; j < 4; j++)
-            {
-                double i_nume = 1.0;
-                for (int k = 0; k < 4; k++)
-                {
-                    if (k != j)
-                    {
-                        i_nume *= (t - t_ref[k]);
-                    }
-                }
-                t_p += c_ref[j] * i_nume / i_deno[j];
-            }
+            t_p = wl_fit.at(t);
 
             double sensit[4] = {1, 1, 1, 1};
 
@@ -689,9 +660,9 @@ extern "C"
                 }
             }
 
-            if (T_MIN < i && i < T_MAX)
+            if (out_range.lo <= i && i <= out_range.hi)
             {
-                if (400 < t_p && t_p < 700)
+                if (WL_MIN < t_p && t_p < WL_MAX)
                 {
 
                     bgr = 0;

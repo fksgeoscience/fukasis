@@ -57,9 +57,9 @@
 
     <!-- calibration -->
     <string name="brightness_format">明るさ ×%1$.1f</string>
-    <string name="calib_saved">校正データを保存しました。</string>
-    <string name="calib_warning_duplicate">保存しましたが、同じ位置のバーが 2 つ以上あります。この校正データではスペクトルを計算できません。</string>
-    <string name="calib_warning_not_monotonic">保存しましたが、400〜700 nm の範囲で波長が単調に変化していません。バーの位置と波長を確認してください。</string>
+    <string name="extra_lines_label">追加の輝線 (任意。チェックしたものを校正に使う)</string>
+    <string name="calib_saved">校正データを保存しました。出力される波長: %1$d〜%2$d nm</string>
+    <string name="calib_warning_truncated">保存しましたが、波長が途中で折り返すため、出力されるのは %1$d〜%2$d nm だけです。バーの位置と波長を確認するか、校正点を追加してください。</string>
     <string name="calib_warning_no_output">保存しましたが、この校正データでは 400〜700 nm に対応する画素がありません。バーの位置と波長を確認してください。</string>
 
     <!-- view -->

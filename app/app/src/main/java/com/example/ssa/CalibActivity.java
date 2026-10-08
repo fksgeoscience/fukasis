@@ -20,6 +20,8 @@ import android.view.View;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.Button;
+import android.widget.CheckBox;
+import android.widget.CompoundButton;
 import android.widget.EditText;
 
 import com.example.ssa.databinding.ActivityCalibBinding;
@@ -61,6 +63,13 @@ public class CalibActivity extends AppCompatActivity{
     TextView[] tv;
     EditText[] et;
     FrameLayout[] line;
+    // 追加の校正点. チェックを入れたものだけ校正に使う
+    int[] tExtra = {0,0};
+    CheckBox[] checkExtra;
+    SeekBar[] sbExtra;
+    TextView[] tvExtra;
+    EditText[] etExtra;
+    FrameLayout[] lineExtra;
 
     private void changesb(int j, int i){
         tv[j].setText("" + i);
@@ -68,6 +77,22 @@ public class CalibActivity extends AppCompatActivity{
         Log.d("a", Integer.toString(fol - t[j]));
         line[j].setX((t[j] +iv1_ofs)*scale);
         line[j].setY(pos[1]-50);
+    }
+
+    private void changeExtra(int j, int i){
+        tvExtra[j].setText("" + i);
+        tExtra[j] = (imgWidth - i);
+        lineExtra[j].setX((tExtra[j] +iv1_ofs)*scale);
+        lineExtra[j].setY(pos[1]-50);
+    }
+
+    private void setExtraEnabled(int j, boolean enabled){
+        sbExtra[j].setEnabled(enabled);
+        etExtra[j].setEnabled(enabled);
+        lineExtra[j].setVisibility(enabled ? View.VISIBLE : View.INVISIBLE);
+        if(enabled){
+            changeExtra(j, sbExtra[j].getProgress());
+        }
     }
 
     // プレビュー画像の表示上の明るさを変える (i=10 ごとに2倍)。書き出す校正データには影響しない
@@ -106,6 +131,35 @@ public class CalibActivity extends AppCompatActivity{
         //TextView t5 = binding.t5;
         FrameLayout l1 = binding.l1;
         line = new FrameLayout[]{binding.l2,binding.l3,binding.l4,binding.l5};
+        checkExtra = new CheckBox[]{binding.extraCheck1,binding.extraCheck2};
+        sbExtra = new SeekBar[]{binding.sb6,binding.sb7};
+        tvExtra = new TextView[]{binding.t6,binding.t7};
+        etExtra = new EditText[]{binding.c5,binding.c6};
+        lineExtra = new FrameLayout[]{binding.l6,binding.l7};
+        for(int k=0; k<checkExtra.length; k++){
+            final int j = k;
+            setExtraEnabled(j, checkExtra[j].isChecked());
+            checkExtra[j].setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+                @Override
+                public void onCheckedChanged(CompoundButton btn, boolean b) {
+                    setExtraEnabled(j, b);
+                }
+            });
+            sbExtra[j].setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+                @Override
+                public void onProgressChanged(SeekBar seekBar, int i, boolean b) {
+                    if(checkExtra[j].isChecked()){
+                        changeExtra(j, i);
+                    }
+                }
+                @Override
+                public void onStartTrackingTouch(SeekBar seekBar) {
+                }
+                @Override
+                public void onStopTrackingTouch(SeekBar seekBar) {
+                }
+            });
+        }
         iv1 = binding.iv1;
         iv1.setScaleType(ImageView.ScaleType.MATRIX);
         iv2 = binding.iv2;
@@ -202,14 +256,42 @@ public class CalibActivity extends AppCompatActivity{
                         for(int i=0; i<4; i++){
                             c[i] = Float.parseFloat(et[i].getText().toString());
                         }
-                        // t[] 自体を書き換えると, 2回目以降の出力や線の位置がずれてしまう
-                        int[] tRel = new int[4];
+                        // 校正点を集める. 基本の 4 本と, チェックの入っている追加分
+                        // (t[] 自体を書き換えると, 2回目以降の出力や線の位置がずれてしまう)
+                        int extraCount = 0;
+                        for(int j=0; j<checkExtra.length; j++){
+                            if(checkExtra[j].isChecked()){
+                                extraCount++;
+                            }
+                        }
+                        double[] tRel = new double[4 + extraCount];
+                        double[] cRef = new double[4 + extraCount];
                         for(int i=0; i<4; i++){
                             tRel[i] = fol - t[i];
                             //folとの相対
+                            cRef[i] = c[i];
                         }
+                        int n = 4;
+                        for(int j=0; j<checkExtra.length; j++){
+                            if(checkExtra[j].isChecked()){
+                                tRel[n] = fol - tExtra[j];
+                                cRef[n] = Float.parseFloat(etExtra[j].getText().toString());
+                                n++;
+                            }
+                        }
+                        // 1 行目が位置, 2 行目が波長. 列の数が校正点の数
                         // 小数点がカンマになる言語設定でも csv が壊れないように Locale を固定
-                        String dat = String.format(Locale.US, "%d,%d,%d,%d\n%f,%f,%f,%f",tRel[0],tRel[1],tRel[2],tRel[3],c[0],c[1],c[2],c[3]);
+                        StringBuilder line1 = new StringBuilder();
+                        StringBuilder line2 = new StringBuilder();
+                        for(int i=0; i<n; i++){
+                            if(i > 0){
+                                line1.append(",");
+                                line2.append(",");
+                            }
+                            line1.append(String.format(Locale.US, "%d", (int)tRel[i]));
+                            line2.append(String.format(Locale.US, "%f", cRef[i]));
+                        }
+                        String dat = line1 + "\n" + line2;
 
                         output.write(dat.getBytes("UTF-8"));
 
@@ -219,19 +301,20 @@ public class CalibActivity extends AppCompatActivity{
 
                         Log.d("a", "csv saved at "+uriCsv.toString());
 
-                        // この校正データでスペクトルが出力できそうかを確かめて知らせる
-                        int message = R.string.calib_saved;
-                        switch(CalibrationValidator.validate(
-                                    new double[]{tRel[0],tRel[1],tRel[2],tRel[3]},
-                                    new double[]{c[0],c[1],c[2],c[3]})){
-                            case CalibrationValidator.DUPLICATE_POSITION:
-                                message = R.string.calib_warning_duplicate;
-                                break;
-                            case CalibrationValidator.NOT_MONOTONIC:
-                                message = R.string.calib_warning_not_monotonic;
+                        // この校正データで csv 画面が出力する波長の範囲を確かめて知らせる
+                        CalibrationValidator.Result check = CalibrationValidator.validate(tRel, cRef, fol);
+                        int wlMin = (int)Math.round(check.wavelengthMin);
+                        int wlMax = (int)Math.round(check.wavelengthMax);
+                        String message;
+                        switch(check.status){
+                            case CalibrationValidator.TRUNCATED:
+                                message = getString(R.string.calib_warning_truncated, wlMin, wlMax);
                                 break;
                             case CalibrationValidator.NO_OUTPUT:
-                                message = R.string.calib_warning_no_output;
+                                message = getString(R.string.calib_warning_no_output);
+                                break;
+                            default:
+                                message = getString(R.string.calib_saved, wlMin, wlMax);
                                 break;
                         }
                         Toast.makeText(activity, message, Toast.LENGTH_LONG).show();
@@ -266,6 +349,9 @@ public class CalibActivity extends AppCompatActivity{
                 l1.setY(pos[1]-50);
                 for(int j=0; j<4; j++){
                     line[j].setY(pos[1]-50);
+                }
+                for(int j=0; j<lineExtra.length; j++){
+                    lineExtra[j].setY(pos[1]-50);
                 }
             }
         });

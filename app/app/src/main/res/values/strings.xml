@@ -105,9 +105,9 @@
     <!-- calibration -->
     <string name="brightness_format">Brightness ×%1$.1f</string>
     <string name="hint_nm" translatable="false">nm</string>
-    <string name="calib_saved">Calibration data saved.</string>
-    <string name="calib_warning_duplicate">Saved, but two or more bars are at the same position. A spectrum cannot be computed from this calibration data.</string>
-    <string name="calib_warning_not_monotonic">Saved, but the wavelength does not change monotonically between 400 and 700 nm. Check the bar positions and wavelengths.</string>
+    <string name="extra_lines_label">Extra lines (optional; checked ones are used)</string>
+    <string name="calib_saved">Calibration data saved. Output range: %1$d–%2$d nm</string>
+    <string name="calib_warning_truncated">Saved, but the wavelength turns back partway, so only %1$d–%2$d nm will be output. Check the bar positions and wavelengths, or add calibration lines.</string>
     <string name="calib_warning_no_output">Saved, but no pixel maps to 400–700 nm with this calibration data. Check the bar positions and wavelengths.</string>
 
     <!-- view -->
