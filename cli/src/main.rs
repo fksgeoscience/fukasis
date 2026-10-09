@@ -26,8 +26,11 @@ fukasis - FUKASIS-app で撮影したデータを PC で処理する
 
   fukasis csv --image <stacked.tif|darked.tif> --calib <calib.csv> --sensitivity <sensit.csv>
               [--fol <x>|auto] [--metadata <metadata.csv>] [-o spectrum.csv]
+              [--band-width <px>] [--band-center <0-1>] [--cfa <RGGB|GRBG|GBRG|BGGR|MONO>]
       スペクトルを csv に出力する (アプリの csv 画面). -o を省くと標準出力に書く.
-      --fol を省くか auto にすると 0次光の位置を自動で推定する
+      --fol を省くか auto にすると 0次光の位置を自動で推定する.
+      --band-width / --band-center は読む帯の幅と中心 (既定は 80 px, 画像の中央),
+      --cfa はカラーフィルタ配列 (既定は metadata に記録されたもの, 無ければ GBRG)
 
   fukasis graph <spectrum.csv> [<spectrum.csv> ...] [-o spectrum.svg] [--title <text>] [--keep-outliers]
       スペクトルのグラフを SVG に出力する (アプリの view 画面). 8 本まで重ねて描ける.
@@ -252,6 +255,9 @@ fn cmd_csv(args: &[String]) -> Result<(), String> {
             "--sensitivity",
             "--fol",
             "--metadata",
+            "--band-width",
+            "--band-center",
+            "--cfa",
             "--output",
         ],
         &[],
@@ -278,11 +284,36 @@ fn cmd_csv(args: &[String]) -> Result<(), String> {
         None => image_path.to_string(),
     };
 
-    let result = spectrum::extract(&img, &cal, &sensitivity, fol)?;
-    report_calibration(&cal, fol);
-    if result.wavelength.is_empty() {
-        eprintln!("警告: 出力される行がありません");
+    let mut options = spectrum::Options::default();
+    if let Some(v) = a.get("--band-width") {
+        options.band_width = v
+            .parse()
+            .ok()
+            .filter(|w| *w >= 2)
+            .ok_or("--band-width には 2 以上の整数を指定してください")?;
     }
+    if let Some(v) = a.get("--band-center") {
+        options.band_center = v
+            .parse()
+            .ok()
+            .filter(|c| (0.0..=1.0).contains(c))
+            .ok_or("--band-center には 0 から 1 の数を指定してください")?;
+    }
+    // カラーフィルタ配列: 指定があればそれ, 無ければ metadata に記録されたもの, それも無ければ GBRG
+    match a.get("--cfa") {
+        Some(v) => {
+            options.cfa = spectrum::Cfa::parse(v)
+                .ok_or("--cfa には RGGB / GRBG / GBRG / BGGR / MONO のどれかを指定してください")?;
+        }
+        None => {
+            if let Some(cfa) = spectrum::cfa_from_metadata(&header) {
+                options.cfa = cfa;
+            }
+        }
+    }
+
+    report_calibration(&cal, fol);
+    let result = spectrum::extract_with(&img, &cal, &sensitivity, fol, &options)?;
     let text = spectrum::to_csv(&result, &header);
     match a.get("--output") {
         Some(o) => {

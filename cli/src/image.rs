@@ -43,12 +43,20 @@ pub fn subtract(light: &Image, dark: &Image) -> Result<Image, String> {
     })
 }
 
+/// スペクトルを読む帯の既定の幅 (px)
+pub const BAND_WIDTH: usize = 80;
+
 /// スペクトルを読む帯 (画像中央の幅 80 px) の行の範囲 [y1, y2)
 pub fn band_rows(height: usize) -> (usize, usize) {
-    const BAND: usize = 80;
-    let y1 = (height / 2).saturating_sub(BAND / 2);
-    let y2 = (height / 2 + BAND / 2).min(height);
-    (y1, y2)
+    band_rows_with(height, BAND_WIDTH, 0.5)
+}
+
+/// 帯の幅 (px) と中心 (画像の高さに対する割合) を指定して, 行の範囲 [y1, y2) を求める
+pub fn band_rows_with(height: usize, width: usize, center: f64) -> (usize, usize) {
+    let center = (height as f64 * center).floor().max(0.0) as usize;
+    let y1 = center.saturating_sub(width / 2);
+    let y2 = (center + width / 2).min(height);
+    (y1, y2.max(y1))
 }
 
 /// 帯の中を縦に平均した, 横方向のプロファイル

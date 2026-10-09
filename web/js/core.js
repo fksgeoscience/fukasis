@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // FUKASIS-app の dark / calibration / csv / view 画面に相当する処理.
-// 計算はアプリ (app/app/src/main/cpp) や cli/ (Rust) と同じ結果になるようにしてある.
+// 計算はアプリ (共通コア core/) や cli/ (Rust) と同じ結果になるようにしてある.
 // ブラウザでは window.FukasisCore, Node では require() で使える.
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) {
@@ -195,11 +195,14 @@
     return { width: light.width, height: light.height, data };
   }
 
-  // スペクトルを読む帯 (画像中央の幅 80 px) の行の範囲 [y1, y2)
-  function bandRows(height) {
-    const BAND = 80;
-    const half = Math.floor(height / 2);
-    return [Math.max(0, half - BAND / 2), Math.min(height, half + BAND / 2)];
+  // スペクトルを読む帯の行の範囲 [y1, y2). 既定は画像中央の幅 80 px.
+  // width は帯の幅 (px), center は帯の中心 (画像の高さに対する割合)
+  function bandRows(height, width, center) {
+    const band = width === undefined ? 80 : width;
+    const mid = Math.max(0, Math.floor(height * (center === undefined ? 0.5 : center)));
+    const half = Math.floor(band / 2);
+    const y1 = Math.max(0, mid - half);
+    return [y1, Math.max(y1, Math.min(height, mid + half))];
   }
 
   // 帯の中を縦に平均した, 横方向のプロファイル
@@ -286,7 +289,7 @@
   }
 
   // ---------------------------------------------------------------- 波長校正
-  // アプリの cpp/wavelength_calib.h と同じ計算
+  // アプリの core/Sources/FukasisCoreC/wavelength_calib.h と同じ計算
 
   const MAX_DEGREE = 3;
   // スペクトルとして出力する波長の範囲 (nm)
@@ -427,48 +430,98 @@
   }
 
   // ---------------------------------------------------------------- スペクトルの出力
-  // アプリの csv 画面 (native-lib.cpp の makecsv) と同じ計算
+  // アプリの csv 画面 (共通コア core/ の makeSpectrum) と同じ計算
 
-  // 感度データの csv を読む. 最初の 2 行はヘッダー, 以降は「波長, b, g, r」
+  // 感度データの csv を読む. 最初の 2 行はヘッダー, 以降は「波長, b, g, r」(5 列目以降は使わない).
+  // 波長の小さい順に並べて返す
   function parseSensitivity(text) {
-    const s = { wavelength: [], channel: [[], [], [], []] };
+    const rows = [];
     const lines = text.split(/\r?\n/);
     for (let number = 2; number < lines.length; number++) {
       if (!lines[number].trim()) continue;
-      const fields = lines[number].split(',');
-      if (fields.length < 4) throw new Error('感度データの ' + (number + 1) + ' 行目の列が足りません');
       const row = [];
-      for (let i = 0; i < 4; i++) {
-        const text = fields[i].trim();
+      for (const field of lines[number].split(',')) {
+        const text = field.trim();
         const v = Number(text);
-        if (text === '' || Number.isNaN(v)) throw new Error('感度データの ' + (number + 1) + ' 行目が数値ではありません');
-        // アプリは単精度 (stof) で読んでいるので合わせる
-        row.push(Math.fround(v));
+        if (text === '' || !Number.isFinite(v)) throw new Error('感度データの ' + (number + 1) + ' 行目が数値ではありません');
+        row.push(v);
       }
+      if (row.length < 4) throw new Error('感度データの ' + (number + 1) + ' 行目の列が足りません');
+      rows.push(row);
+    }
+    if (rows.length < 2) throw new Error('感度データが 2 行未満です');
+    rows.sort((a, b) => a[0] - b[0]);
+    const s = { wavelength: [], channel: [[], [], [], []] };
+    for (const row of rows) {
       s.wavelength.push(row[0]);
       s.channel[0].push(row[1]);
       s.channel[1].push(row[2]);
       s.channel[2].push(row[3]);
       s.channel[3].push(row[1] + row[2] + row[3]);
     }
-    if (s.wavelength.length < 2) throw new Error('感度データが 2 行未満です');
     return s;
   }
 
-  // (x, y) の画素のチャンネル. 0: b, 1: g, 2: r
-  function channelOf(x, y) {
-    if (x % 2 !== 0 && y % 2 === 0) return 0;
-    if (x % 2 === 0 && y % 2 !== 0) return 2;
-    return 1;
+  // 波長 wl での感度の合計 (線形補間. 表の範囲外は端の値)
+  function sensitivityAt(sensitivity, wl) {
+    const w = sensitivity.wavelength;
+    const total = sensitivity.channel[3];
+    let hi = 0;
+    while (hi < w.length && w[hi] <= wl) hi++;
+    if (hi === 0) return total[0];
+    if (hi === w.length) return total[w.length - 1];
+    const lo = hi - 1;
+    return total[lo] + ((wl - w[lo]) * (total[hi] - total[lo])) / (w[hi] - w[lo]);
+  }
+
+  // カラーフィルタ配列. 左上 2x2 を読み順に並べた名前
+  const CFA_NAMES = ['RGGB', 'GRBG', 'GBRG', 'BGGR', 'MONO'];
+
+  // "rggb" などを 'RGGB' の形にそろえる. 知らない名前なら null
+  function parseCfa(name) {
+    const upper = String(name).toUpperCase();
+    return CFA_NAMES.includes(upper) ? upper : null;
+  }
+
+  // metadata の 1 行目に ", cfa XXXX" があれば, 撮影した端末のカラーフィルタ配列として返す. 無ければ null
+  function cfaFromMetadata(header) {
+    const line = (header || '').split(/\r?\n/)[0];
+    const pos = line.lastIndexOf(', cfa ');
+    if (pos < 0) return null;
+    return parseCfa(/^[A-Za-z]*/.exec(line.slice(pos + 6))[0]);
+  }
+
+  // (x, y) の画素のチャンネル. 0: b, 1: g, 2: r (MONO は常に 1). cfa を省くと GBRG (アプリの既定)
+  function channelOf(x, y, cfa) {
+    const pattern = cfa || 'GBRG';
+    if (pattern === 'MONO') return 1;
+    const color = pattern[(y & 1) * 2 + (x & 1)];
+    return color === 'B' ? 0 : color === 'R' ? 2 : 1;
   }
 
   // 画像からスペクトルを取り出す. fol は 0次光の位置 (画像の x 座標, px).
-  // 返すのは {wavelength, intensity, fit, range}. intensity は最大値が 1 になるように正規化した相対強度
-  function extract(img, cal, sensitivity, fol) {
+  // options は {bandWidth, bandCenter, cfa} (どれも省略できる. 既定は 80 px, 0.5, 'GBRG').
+  // 返すのは {wavelength, intensity, fit, range}. intensity は最大値が 1 になるように正規化した相対強度.
+  // 出力できないときはエラーを投げる
+  function extract(img, cal, sensitivity, fol, options) {
+    const opts = options || {};
     if (!Number.isInteger(fol) || fol < 1 || fol >= img.width) {
       throw new Error('0次光の位置 ' + fol + ' が画像の幅 ' + img.width + ' の外です');
     }
-    const [y1, y2] = bandRows(img.height);
+    if (cal.t.length !== cal.c.length || cal.t.length < 2) throw new Error('校正データの距離と波長の数が合いません');
+    for (let j = 0; j < cal.t.length; j++) {
+      for (let k = j + 1; k < cal.t.length; k++) {
+        if (cal.t[j] === cal.t[k]) throw new Error('校正データの画素位置が重複しています');
+      }
+    }
+    // t -> 波長 の対応. 4 点ならその 4 点を通る 3 次式, 5 点以上なら 3 次の最小二乗
+    const f = fit(cal.t, cal.c);
+    if (!f.ok) throw new Error('校正データから波長を求められません');
+    if (sensitivity.wavelength.length < 2) throw new Error('感度データが足りません');
+
+    const cfa = opts.cfa ? parseCfa(opts.cfa) : 'GBRG';
+    if (cfa === null) throw new Error('カラーフィルタ配列 ' + opts.cfa + ' は分かりません');
+    const [y1, y2] = bandRows(img.height, opts.bandWidth, opts.bandCenter);
     const SIGMA_THRES = 3.0;
     const at = (y, x) => img.data[y * img.width + x];
 
@@ -478,52 +531,44 @@
       const count = [0, 0, 0];
       const mean = [0, 0, 0];
       const sigma = [0, 0, 0];
-      const pixel = [0, 0, 0];
+      const sum = [0, 0, 0];
       for (let y = y1; y < y2; y++) {
-        const ch = channelOf(x, y);
+        const ch = channelOf(x, y, cfa);
         mean[ch] += at(y, x);
         count[ch]++;
       }
-      for (let ch = 0; ch < 3; ch++) mean[ch] /= count[ch];
+      for (let ch = 0; ch < 3; ch++) if (count[ch] > 0) mean[ch] /= count[ch];
       for (let y = y1; y < y2; y++) {
-        const ch = channelOf(x, y);
+        const ch = channelOf(x, y, cfa);
         const d = at(y, x) - mean[ch];
         sigma[ch] += d * d;
       }
-      for (let ch = 0; ch < 3; ch++) sigma[ch] = Math.sqrt(sigma[ch] / count[ch]);
+      for (let ch = 0; ch < 3; ch++) if (count[ch] > 0) sigma[ch] = Math.sqrt(sigma[ch] / count[ch]);
       for (let y = y1; y < y2; y++) {
-        const ch = channelOf(x, y);
+        const ch = channelOf(x, y, cfa);
         const val = at(y, x);
         if (SIGMA_THRES * sigma[ch] < Math.abs(val - mean[ch])) {
           count[ch]--;
         } else {
-          pixel[ch] += val < 0 ? 0 : val;
+          sum[ch] += val < 0 ? 0 : val;
         }
       }
-      for (let ch = 0; ch < 3; ch++) pure[ch].push(pixel[ch] / Math.max(count[ch], 1));
+      for (let ch = 0; ch < 3; ch++) pure[ch].push(sum[ch] / Math.max(count[ch], 1));
     }
     const size = pure[0].length;
 
-    const f = fit(cal.t, cal.c);
+    // 出力する範囲. 画素の固定範囲ではなく波長で決める. 波長が逆行する部分は含めない
+    const noOutput = WAVELENGTH_MIN + '-' + WAVELENGTH_MAX + 'nm に入る点がありません (校正データと 0次光の位置を確認してください)';
     const range = outputRange(f, cal.t, size);
-    const inRange = (i) => range !== null && range.lo <= i && i <= range.hi;
+    if (range === null) throw new Error(noOutput);
 
     // Bayer 配列で b と r は 1 列おきにしか無いので, 欠けている列を両隣から補う
-    const min = [65536, 65536, 65536];
-    let max = 0;
+    const min = [Number.MAX_VALUE, Number.MAX_VALUE, Number.MAX_VALUE];
     for (let i = 1; i < size - 1; i++) {
-      let bgr = 0;
-      if (pure[0][i] === 0) {
-        pure[0][i] = pure[0][i - 1] + (pure[0][i + 1] - pure[0][i - 1]) / 2;
-        bgr += pure[0][i];
+      for (const c of [0, 2]) {
+        if (pure[c][i] === 0) pure[c][i] = (pure[c][i - 1] + pure[c][i + 1]) / 2;
       }
-      bgr += pure[1][i];
-      if (pure[2][i] === 0) {
-        pure[2][i] = pure[2][i - 1] + (pure[2][i + 1] - pure[2][i - 1]) / 2;
-        bgr += pure[2][i];
-      }
-      if (inRange(i)) {
-        if (max < bgr) max = bgr;
+      if (range.lo <= i && i <= range.hi) {
         for (let c = 0; c < 3; c++) {
           if (pure[c][i] < min[c]) min[c] = pure[c][i];
         }
@@ -531,33 +576,26 @@
     }
 
     // 波長と感度の校正
-    const wl = sensitivity.wavelength;
-    const total = sensitivity.channel[3];
-    const n = wl.length;
     const wavelength = [];
     const intensity = [];
-    for (let i = 0; i < size; i++) {
+    let max = 0;
+    for (let i = range.lo; i <= range.hi; i++) {
       const tp = polyAt(f, i);
-      let totalSensitivity = 1;
-      if (n >= 2) {
-        let vi = 1;
-        while (vi < n - 1 && wl[vi] < tp) vi++;
-        totalSensitivity = total[vi - 1] + ((tp - wl[vi]) * (total[vi] - total[vi - 1])) / (wl[vi] - wl[vi - 1]);
+      if (!(WAVELENGTH_MIN < tp && tp < WAVELENGTH_MAX)) continue;
+      const s = sensitivityAt(sensitivity, tp);
+      if (!(s > 0)) continue; // 感度 0 の波長は補正できない
+      let bgr = 0;
+      for (let c = 0; c < 3; c++) {
+        const v = pure[c][i] - min[c];
+        if (v > 0) bgr += v;
       }
-      if (inRange(i) && WAVELENGTH_MIN < tp && tp < WAVELENGTH_MAX) {
-        let bgr = 0;
-        for (let c = 0; c < 3; c++) {
-          pure[c][i] -= min[c];
-          if (pure[c][i] <= 0) pure[c][i] = 0;
-          bgr += pure[c][i];
-        }
-        bgr /= totalSensitivity;
-        if (max < bgr) max = bgr;
-        wavelength.push(tp);
-        intensity.push(bgr);
-      }
+      bgr /= s;
+      if (max < bgr) max = bgr;
+      wavelength.push(tp);
+      intensity.push(bgr);
     }
-    if (max <= 0) max = 1;
+    if (wavelength.length === 0) throw new Error(noOutput);
+    if (!(max > 0)) throw new Error('スペクトルの強度が 0 です');
     for (let i = 0; i < intensity.length; i++) intensity[i] /= max;
     return { wavelength, intensity, fit: f, range };
   }
@@ -812,6 +850,9 @@
     fit,
     outputRange,
     parseSensitivity,
+    sensitivityAt,
+    parseCfa,
+    cfaFromMetadata,
     channelOf,
     extract,
     toCsv,
