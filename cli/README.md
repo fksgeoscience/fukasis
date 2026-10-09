@@ -94,4 +94,13 @@ cargo test
 
 ## リリース
 
-crates.io のクレート (`fukasis`) として配布できる形にしてあります (まだ公開していません)。手順は [docs/releasing.md](../docs/releasing.md) にあります。
+GitHub Releases・crates.io (`fukasis`)・npm (`fukasis`) で配布できる形にしてあります。手順は [docs/releasing.md](../docs/releasing.md) にあります。
+公開後は、次のどれでも入れられます。
+
+```bash
+cargo install fukasis
+```
+
+```bash
+npm install -g fukasis
+```

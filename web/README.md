@@ -100,6 +100,6 @@ fs.writeFileSync('spectrum.csv', core.toCsv(spectrum, ''));
 node --test web/test/core.test.js web/test/server.test.js
 ```
 
-npm のパッケージ (`fukasis-web`) として配布できる形にしてあります (まだ公開していません)。リリースの手順は [docs/releasing.md](../docs/releasing.md) にあります。
+リリースでは web 版一式を zip にして GitHub Releases に置きます。手順は [docs/releasing.md](../docs/releasing.md) にあります。
 
 テストでは、アプリの C++ をそのまま動かして作った正解データ (`testdata/`) と出力が一致することを確かめています。

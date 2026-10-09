@@ -1,7 +1,7 @@
 # PC 用ツール (web / cli) のリリース手順
 
-`web/` と `cli/` は、GitHub Release と npm / crates.io で配布できるように準備してあります。
-**npm と crates.io にはまだ公開していません。** 公開するかどうかを決めたら、この手順で進めます。
+`web/` と `cli/` を、GitHub Releases・npm・crates.io で配布するための手順です。
+リリースは **igarinpiano/fukasis** で行います (`publish-all` はほかのリポジトリでは止まります)。
 
 アプリ本体 (APK) のリリースは `v*` タグ、PC 用ツールは `pc-v*` タグで、別々に行います。
 
@@ -9,57 +9,94 @@
 
 | 配布先 | 名前 | 中身 |
 |---|---|---|
-| GitHub Release | `fukasis-<バージョン>-<ターゲット>.zip` | コマンドライン版の実行ファイル (Linux / macOS / Windows) |
-| GitHub Release | `fukasis-web-<バージョン>.zip` | web 版一式 (展開して `index.html` を開く) |
-| crates.io | [`fukasis`](../cli/Cargo.toml) | コマンドライン版 (`cargo install fukasis`) とライブラリ |
-| npm | [`fukasis-web`](../web/package.json) | web 版 (`npx fukasis-web --open`) と、Node.js から使える計算部分 (`require('fukasis-web')`) |
+| GitHub Releases | `fukasis-<バージョン>-<ターゲット>.tar.gz` / `.zip` | コマンドライン版の実行ファイル (全ターゲット) |
+| GitHub Releases | `fukasis-web-<バージョン>.zip` | web 版一式 (展開して `index.html` を開く) |
+| GitHub Releases | `SHA256SUMS` | 上のファイルのハッシュ値 |
+| crates.io | `fukasis` | コマンドライン版 (`cargo install fukasis`) とライブラリ |
+| npm | `fukasis` | 親パッケージ (`npm install -g fukasis`)。合う機種別パッケージを選んで起動する |
+| npm | `@fksgeo/fukasis-bin-<機種>` | 機種別の実行ファイル。親パッケージの `optionalDependencies` で入る |
 
-どちらの名前も 2026-10-08 の時点では空いていました。公開する直前にもう一度確かめてください。
+crates.io は 1 クレートだけです (`cli/` は外部クレートに依存しておらず、ライブラリと実行ファイルが同じクレートに入っています)。
 
-## 公開する前に決めること
+## 対応する機種
 
-- **誰の名前で公開するか。** crates.io も npm も、最初に公開した人が所有者になります。チームで管理するなら、公開後に所有者を追加します (`cargo owner --add`, `npm owner add`)。
-- **リポジトリの URL。** `cli/Cargo.toml` と `web/package.json` には `https://github.com/legrs/fukasis` を書いてあります。別のリポジトリを正とするなら書き換えます。
-- **名前。** npm は組織の名前を付けた `@<組織>/fukasis-web` にもできます。変えるなら `web/package.json` の `name` と README を直します。
-- **取り消せないこと。** crates.io に公開したバージョンは削除できません (`cargo yank` で新規の利用を止められるだけ)。npm も公開から 72 時間を過ぎると原則として削除できません。同じバージョン番号は二度と使えません。
+ビルドするターゲットは [reusable-build-matrix.yml](../.github/workflows/reusable-build-matrix.yml) に、
+そのうち npm で配るものは [npm/targets.js](../npm/targets.js) にあります。
 
-## リリースの流れ
+- **必須** (失敗するとリリースが止まる): macOS (arm64 / x64)、Windows (x64 / arm64)、Linux (x64 / arm64 の glibc 版と musl 版)
+- **任意** (失敗してもその機種が配られないだけ): 32 bit の Windows / Linux、ARMv5〜v7、RISC-V、PowerPC、s390x、SPARC、LoongArch、Android (Termux)、FreeBSD、NetBSD、illumos、WebAssembly (WASI) など
 
-1. `cli/Cargo.toml` と `web/package.json` の `version` を同じ値に上げ、`cli/` で `cargo build` して `Cargo.lock` を更新します。
-2. master に入れ、「PC tools」ワークフローが通っていることを確かめます (テストのほか、`cargo package` と `npm pack --dry-run` で配布物の中身も確かめています)。
-3. タグを付けて push します。
+Windows GNU 版、macOS universal 版、WASI 版、ビッグエンディアンの PowerPC などは GitHub Releases だけで配ります。
+
+ターゲットを足すときは、`reusable-build-matrix.yml` に 1 行足し、npm でも配るなら `npm/targets.js` と `npm/launcher.js` の表にも足します
+(2 つの表がそろっていることはテストで確かめています)。`build-check` ワークフローで、何も公開せずに全ターゲットをビルドできます。
+
+## ワークフロー
+
+| ワークフロー | 役割 |
+|---|---|
+| `PC tools` | push / PR ごとのテスト |
+| `build-check` | 全ターゲットをビルドし、npm のパッケージを組み立てて実際に入れてみる。何も公開しない |
+| `publish-all` | リリース。GitHub Releases → npm → crates.io の順。手動実行のみ |
+
+`publish-all` と `build-check` の手動実行は、ワークフローのファイルが既定のブランチ (master) に入ってから使えます。
+
+## 最初のリリース
+
+npm と crates.io の Trusted Publishing (GitHub Actions からトークンなしで公開する仕組み) は、**もう存在するパッケージにしか設定できません**。
+そのため最初の 1 回だけ、手元から公開します。
+
+1. **npm に組織 `fksgeo` を作ります** (npmjs.com → Add Organization)。`@fksgeo/fukasis-bin-*` の置き場所です。
+2. **`cli/Cargo.toml` と `web/package.json` の `version` をそろえて** master に入れます (`Cargo.lock` も更新します)。
+3. **GitHub Release を作ります。** Actions → `publish-all` → Run workflow で、「Publish to GitHub Releases」だけにチェックを入れて実行します。
+   タグ `pc-v<バージョン>` と Release ができ、実行ファイルが付きます。
+4. **手元でログインします。**
 
    ```bash
-   git tag pc-v0.1.0
+   cargo login
    ```
 
    ```bash
-   git push origin pc-v0.1.0
+   npm login
    ```
 
-4. 「PC tools release」ワークフローが、実行ファイルと web 版の zip を付けた GitHub Release の**下書き**を作ります。内容を確かめて、GitHub の画面から公開します。
+5. **まず予行演習をします** (何も公開しません)。
 
-タグを付けずに試したいときは、「PC tools release」を手動で実行します。Release も公開もせず、配布物を実行結果 (Artifacts) に残すだけです。
+   ```bash
+   scripts/first-publish.sh 0.1.0 --dry-run
+   ```
 
-## crates.io / npm への公開
+6. **公開します。** `--trust` を付けると、公開した npm の各パッケージに Trusted Publishing も登録します。
 
-既定では公開しません。有効にするには、リポジトリの Settings → Secrets and variables → Actions で次を設定します。
+   ```bash
+   scripts/first-publish.sh 0.1.0 --trust
+   ```
 
-| 公開先 | 変数 (Variables) | シークレット (Secrets) |
-|---|---|---|
-| crates.io | `PUBLISH_CRATES_IO` = `true` | `CARGO_REGISTRY_TOKEN` (crates.io の API トークン) |
-| npm | `PUBLISH_NPM` = `true` | `NPM_TOKEN` (npm の Automation トークン) |
+   途中で止まっても、もう一度実行すれば続きから進みます (公開済みのものは飛ばします)。
 
-設定してあると、タグを push したときに実行ファイルのビルドが済んでから公開します。
+7. **crates.io に Trusted Publishing を登録します。** crates.io → `fukasis` → Settings → Trusted Publishing:
+   owner `igarinpiano` / repo `fukasis` / workflow `publish-all.yml` / environment `crates-io`
+8. **リポジトリに Environment を作ります。** Settings → Environments で `npm` と `crates-io` を作ります
+   (承認が要るように設定しておくと、公開の直前に確認できます)。
 
-手元から公開することもできます。
+crates.io も npm も、**公開したバージョンは取り消せません** (crates.io は `cargo yank` で新規の利用を止められるだけ、npm も 72 時間を過ぎると原則削除できません)。
+同じバージョン番号は二度と使えません。
+
+## 2 回目以降のリリース
+
+1. `cli/Cargo.toml` と `web/package.json` の `version` を上げ、`cli/` で `cargo build` して `Cargo.lock` を更新し、master に入れます。
+2. Actions → `publish-all` → Run workflow を、全部にチェックを入れたまま実行します。
+
+`version` の欄にバージョンを入れておくと、`cli/Cargo.toml` と違うときに止まります (取り違えの防止)。
+`ref` にタグを入れると、そのタグの内容をビルドします (古いリリースに実行ファイルを足すときなど)。
+
+## あとから機種を足したとき
+
+新しい機種の npm パッケージはまだ存在しないので、`publish-all` の npm の段は、ほかを全部公開したうえでその名前を挙げて失敗します。
+一度だけ手元から公開してください (公開済みのものは飛ばされます)。
 
 ```bash
-cd cli && cargo publish --dry-run
+scripts/first-publish.sh 0.1.1 --npm-only --trust
 ```
 
-```bash
-cd web && npm publish --dry-run
-```
-
-`--dry-run` を外すと実際に公開されます。
+npm の段が失敗すると crates.io の段は飛ばされるので、`publish-all` を「Publish to crates.io」だけにしてもう一度実行します。
