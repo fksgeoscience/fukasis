@@ -2,7 +2,7 @@
 package com.example.ssa;
 
 // 波長校正データから, csv 画面でどの波長の範囲が出力されるかを確かめる.
-// 計算は cpp/wavelength_calib.h (makecsv が使う) と同じ. 変えるときは両方直すこと
+// 計算は core/Sources/FukasisCoreC/wavelength_calib.h (makecsv が使う) と同じ. 変えるときは両方直すこと
 public class CalibrationValidator {
 
     public static final int OK = 0;

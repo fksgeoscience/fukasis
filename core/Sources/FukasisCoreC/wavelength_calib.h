@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 // 波長校正: 0次光からの距離 t (px) から波長 (nm) への対応と, スペクトルとして出力する t の範囲.
-// JNI にも OpenCV にも依存しない. CalibrationValidator.java に同じ計算があるので, 変えるときは両方直すこと
+// OpenCV にも OS にも依存しない. spectrum.cpp (makeSpectrum) が使う.
+// 同じ計算が CalibrationValidator.java, cli/src/calib.rs, web/js/core.js にあるので, 変えるときは全部直すこと
 #pragma once
 
 #include <algorithm>

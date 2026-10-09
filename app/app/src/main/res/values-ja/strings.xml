@@ -12,6 +12,7 @@
     <string name="menu_csv">スペクトル出力</string>
     <string name="menu_calibration">波長校正</string>
     <string name="menu_view">スペクトル表示</string>
+    <string name="menu_device">機種設定</string>
     <!-- 切替先の言語名を表示する -->
     <string name="switch_language">English</string>
     <string name="toast_storage_access_granted">ストレージフルアクセス権限があります</string>

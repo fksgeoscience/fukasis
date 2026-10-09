@@ -44,6 +44,10 @@
             android:exported="false"
             android:screenOrientation="fullUser" />
         <activity
+            android:name=".DeviceActivity"
+            android:exported="false"
+            android:screenOrientation="fullUser" />
+        <activity
             android:name=".CapActivity"
             android:exported="false"
             android:screenOrientation="fullUser"

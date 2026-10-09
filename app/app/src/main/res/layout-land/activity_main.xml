@@ -62,6 +62,13 @@
                 android:layout_height="wrap_content"
                 android:layout_margin="12dp"
                 android:text="@string/menu_view" />
+
+            <Button
+                android:id="@+id/deviceBtn"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_margin="12dp"
+                android:text="@string/menu_device" />
         </LinearLayout>
 
         <Button
