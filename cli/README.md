@@ -129,4 +129,4 @@ cargo test
 ## リリース
 
 [GitHub Releases](https://github.com/igarinpiano/fukasis/releases)・[crates.io](https://crates.io/crates/fukasis)・[npm](https://www.npmjs.com/package/fukasis) で配布しています。
-新しいバージョンを出す手順は [docs/releasing.md](../docs/releasing.md) にあります。
+新しいバージョンを出す手順は [docs/releasing.md](https://github.com/igarinpiano/fukasis/blob/release/docs/releasing.md) にあります。
