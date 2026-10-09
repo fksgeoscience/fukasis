@@ -422,7 +422,7 @@ release/
 1. **CAPTURE**ボタンを押します！撮影が開始されます。\
     1枚撮影が終わるたびに長音3回のBeep音が鳴ります(Beep-Beep-Beep)。\
     capture sequenceが終わると長音6回のBeep音が鳴ります(Beep-Beep-Beep-Beep-Beep-Beep)\
-    画像は `Internal_Storage/Documents/FUKASIS-app/imgs`下にsequence nameのディレクトリが作成され、保存されます。それぞれのraw画像(.dng)と`stacked.tif`と`stacked.jpg`が保存されます。
+    画像は `Internal_Storage/Documents/FUKASIS-app/imgs`下にsequence nameのディレクトリが作成され、保存されます。それぞれのraw画像(.dng)と`stacked.tif`(全フレームの平均)と`stacked.jpg`が保存されます。
 <br><br>
 1. 分光器を遮光して暗くした状態で、観測と同じ方法でダークフレームをとります。同じ露光時間・ISO感度にしてください。名前は`dark_20260314`にようにすると良いです。 なおダークフレームを撮らなくてもスペクトル出力はできます。
     スリットの差し込み口から光が入らないよう気をつけてください。
@@ -442,7 +442,7 @@ release/
     **AUTO DETECT (FOL & PEAKS)** を押すと、0次光と4本の輝線を自動で検出してスライダーを合わせます(右側の波長の値と、輝線どうしの間隔の比から対応を決めます)。結果を目で確認してから EXPORT CSV してください。うまくいかないときは従来どおり手動で合わせられます。
 1. 他のスライダーで波長(右側のtextbodと画像上の位置(スライダーで動かす)を対応させていきます。3次のlagrange補間をするので、4本必要です。波長の初期値は蛍光灯のものです。(588.0 nmの輝線は分かりづらいですが、オレンジの輝線が2本並んでいるうちの長波長側のものです)\
     波長の数値は変更できるので，三波長型蛍光灯以外を使う場合は事前に調べて打ち込みましょう．同定がけっこう難しいくて……ここはどうしても苦戦するところです
-1. **EXPORT CSV** を押すことで、波長校正データが``に出力されます
+1. **EXPORT CSV** を押すことで、波長校正データが`Internal_Storage/Documents/FUKASIS-app/csv/calibdata/`に出力されます
 
 ### 解析
 主にPCや別アプリで行うことを想定していますが、グラフ表示など最低限の機能はFUKASIS-appに搭載してありあす。\
@@ -509,8 +509,16 @@ FUKASIS は、開発者の所属する長野県松本深志高等学校地学會
 
 <br><br><br><br>
 
+
+# 開発の詳細 About this Study
+FUKASISの開発に至るまでの詳細や，技術的な部分は
+[部活の2026年度部誌31頁](https://fksgeoscience.github.io/doc/m45_2026_2.pdf#page=32)
+をご覧ください．
+
+<br><br><br><br>
+
 # お問い合わせ
-質問・相談・不具合の報告などは、**[Twitter@legrs4073](https://x.com/legrs4073)** 又は **[ktgwyi01@gmail.com](mail:ktgwyi01@gmail.com)** 又は **[本repositoryのIssue](https://github.com/legrs/fukasis/issues)** へお気軽にお寄せください。\
+質問・相談・不具合の報告などは、**[Twitter@legrs4073](https://x.com/legrs4073)** 又は **[ktgwyi01@gmail.com](mailto:ktgwyi01@gmail.com)** 又は **[本repositoryのIssue](https://github.com/legrs/fukasis/issues)** へお気軽にお寄せください。\
 ただし、製作者が大学入試に備えるため2026年度中は更新ができない可能性が高いです(応答はできる限りします)。
 
 (この`README.md`は短期間で作成したもので、自分でもちょっと不親切な出来だと思っています。
