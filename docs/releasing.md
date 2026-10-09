@@ -14,6 +14,7 @@
 | 配布先 | 名前 | 中身 |
 |---|---|---|
 | GitHub Releases | `fukasis-<バージョン>-<ターゲット>.tar.gz` / `.zip` | コマンドライン版の実行ファイル (全ターゲット) |
+| GitHub Pages | <https://igarinpiano.github.io/fukasis/> | web 版 (開くだけで使える。`release` ブランチの最新) |
 | GitHub Releases | `fukasis-web-<バージョン>.zip` | web 版一式 (展開して `index.html` を開く) |
 | GitHub Releases | `SHA256SUMS` | 上のファイルのハッシュ値 |
 | crates.io | `fukasis` | コマンドライン版 (`cargo install fukasis`) とライブラリ |
@@ -42,6 +43,7 @@ Windows GNU 版、macOS universal 版、WASI 版、ビッグエンディアン�
 | `PC tools` | push / PR ごとのテスト |
 | `build-check` | 全ターゲットをビルドし、npm のパッケージを組み立てて実際に入れてみる。何も公開しない |
 | `publish-all` | リリース。GitHub Releases → npm → crates.io の順。手動実行のみ |
+| `pages` | web 版を <https://igarinpiano.github.io/fukasis/> に載せる。`release` ブランチの `web/` が変わるたびに動く |
 
 `publish-all` と `build-check` の手動実行は、ワークフローのファイルが既定のブランチに入っているリポジトリで使えます (igarinpiano/fukasis の既定のブランチは `release`)。
 

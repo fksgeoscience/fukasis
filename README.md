@@ -471,7 +471,7 @@ csvは最初の2行にヘッダーがあります。
 
 撮影したデータをPCでじっくり処理したい場合は、次の2つが使えます。どちらもアプリのdark / calibration / csv / view画面に相当する処理ができ、計算結果はアプリと同じになるようにしてあります。
 
-- [web版](./web/README.md) : `web/index.html`をブラウザで開くだけで使えます。画像を見ながら輝線の位置を合わせたり、複数のスペクトルを重ねて比べたりできます。[GitHub Releases](https://github.com/igarinpiano/fukasis/releases)の`fukasis-web-<バージョン>.zip`を展開して使うこともできます。
+- [web版](./web/README.md) : **<https://igarinpiano.github.io/fukasis/>** をブラウザで開くだけで使えます。画像を見ながら輝線の位置を合わせたり、複数のスペクトルを重ねて比べたりできます。選んだファイルはブラウザの中だけで処理され、どこにも送信されません。ネットにつながない場所では、[GitHub Releases](https://github.com/igarinpiano/fukasis/releases)の`fukasis-web-<バージョン>.zip`を展開して`index.html`を開きます。
 - [コマンドライン版](./cli/README.md) : Rust製です。まとめて処理したいときやスクリプトから呼びたいときに使います。次のどちらかで入れられます（ビルド済みの実行ファイルは[GitHub Releases](https://github.com/igarinpiano/fukasis/releases)にもあります）。
 
 ```bash
