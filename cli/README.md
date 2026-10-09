@@ -6,7 +6,39 @@ FUKASIS-app で撮影したデータを PC で処理するコマンドライン�
 
 計算はアプリ (共通コア `core/`) と同じ結果になるようにしてあります。
 
-## ビルド
+## インストール
+
+次のどれかで入れられます。入れると `fukasis` コマンドが使えるようになります。
+
+**npm** ([Node.js](https://nodejs.org/) が入っている場合。ビルド済みの実行ファイルが入ります)
+
+```bash
+npm install -g fukasis
+```
+
+**cargo** ([Rust](https://www.rust-lang.org/ja/tools/install) が入っている場合。手元でビルドされます)
+
+```bash
+cargo install fukasis
+```
+
+**実行ファイルをそのまま使う**
+
+[GitHub Releases](https://github.com/igarinpiano/fukasis/releases) の `pc-v<バージョン>` から、自分の機種の `fukasis-<バージョン>-<ターゲット>` を取って展開します。
+
+| 機種 | ターゲット |
+|---|---|
+| Windows (64 bit) | `x86_64-pc-windows-msvc` |
+| Windows (ARM) | `aarch64-pc-windows-msvc` |
+| macOS (Apple シリコン) | `aarch64-apple-darwin` |
+| macOS (Intel) | `x86_64-apple-darwin` |
+| Linux (64 bit) | `x86_64-unknown-linux-gnu` (古い環境や Alpine では `-musl`) |
+| Linux (ARM 64 bit, Raspberry Pi など) | `aarch64-unknown-linux-gnu` |
+
+ほかに 32 bit の Windows / Linux、ARMv5〜v7、RISC-V、PowerPC、s390x、LoongArch、Android (Termux)、FreeBSD、NetBSD、illumos、WebAssembly (WASI) 向けもあります。
+npm で入るのはこのうち 28 機種で、それ以外は GitHub Releases から取ってください。
+
+## ソースからビルド
 
 [Rust](https://www.rust-lang.org/ja/tools/install) が必要です。外部クレートには依存していません。
 
@@ -17,7 +49,6 @@ cargo build --release
 
 `cli/target/release/fukasis` (Windows では `fukasis.exe`) ができます。
 `cargo install --path cli` (リポジトリの直下で実行) とすると、`fukasis` コマンドとしてインストールされます。
-GitHub Actions の「PC tools」が動いているリポジトリでは、その実行結果からビルド済みの実行ファイル (Linux / macOS / Windows) も取得できます。
 
 ## 使い方
 
@@ -97,13 +128,5 @@ cargo test
 
 ## リリース
 
-GitHub Releases・crates.io (`fukasis`)・npm (`fukasis`) で配布できる形にしてあります。手順は [docs/releasing.md](../docs/releasing.md) にあります。
-公開後は、次のどれでも入れられます。
-
-```bash
-cargo install fukasis
-```
-
-```bash
-npm install -g fukasis
-```
+[GitHub Releases](https://github.com/igarinpiano/fukasis/releases)・[crates.io](https://crates.io/crates/fukasis)・[npm](https://www.npmjs.com/package/fukasis) で配布しています。
+新しいバージョンを出す手順は [docs/releasing.md](../docs/releasing.md) にあります。

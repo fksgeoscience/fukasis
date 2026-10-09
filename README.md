@@ -471,12 +471,20 @@ csvは最初の2行にヘッダーがあります。
 
 撮影したデータをPCでじっくり処理したい場合は、次の2つが使えます。どちらもアプリのdark / calibration / csv / view画面に相当する処理ができ、計算結果はアプリと同じになるようにしてあります。
 
-- [web版](./web/README.md) : `web/index.html`をブラウザで開くだけで使えます。画像を見ながら輝線の位置を合わせたり、複数のスペクトルを重ねて比べたりできます。
-- [コマンドライン版](./cli/README.md) : Rust製です。まとめて処理したいときやスクリプトから呼びたいときに使います。
+- [web版](./web/README.md) : `web/index.html`をブラウザで開くだけで使えます。画像を見ながら輝線の位置を合わせたり、複数のスペクトルを重ねて比べたりできます。[GitHub Releases](https://github.com/igarinpiano/fukasis/releases)の`fukasis-web-<バージョン>.zip`を展開して使うこともできます。
+- [コマンドライン版](./cli/README.md) : Rust製です。まとめて処理したいときやスクリプトから呼びたいときに使います。次のどちらかで入れられます（ビルド済みの実行ファイルは[GitHub Releases](https://github.com/igarinpiano/fukasis/releases)にもあります）。
+
+```bash
+npm install -g fukasis
+```
+
+```bash
+cargo install fukasis
+```
 
 `Internal_Storage/Documents/FUKASIS-app/`をPCにコピーして使ってください。
 
-配布の準備（GitHub Release / crates.io / npm）については[docs/releasing.md](./docs/releasing.md)を参照してください。
+新しいバージョンを出す手順は[docs/releasing.md](./docs/releasing.md)にあります。
 
 <br><br><br><br>
 

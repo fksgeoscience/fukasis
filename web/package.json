@@ -9,7 +9,7 @@
     "url": "git+https://github.com/igarinpiano/fukasis.git",
     "directory": "web"
   },
-  "homepage": "https://github.com/igarinpiano/fukasis/tree/master/web",
+  "homepage": "https://github.com/igarinpiano/fukasis",
   "bugs": "https://github.com/igarinpiano/fukasis/issues",
   "keywords": [
     "spectroscopy",

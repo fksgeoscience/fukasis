@@ -4,6 +4,7 @@ FUKASIS-app で撮影したデータを、PC のブラウザで処理するた�
 アプリの **dark / calibration / csv / view** の 4 画面に相当する機能があります (撮影はできません)。
 
 - インストールもビルドも不要です。`web/index.html` をブラウザで開くだけで動きます。
+- リポジトリを取得しなくても、[GitHub Releases](https://github.com/igarinpiano/fukasis/releases) の `fukasis-web-<バージョン>.zip` を展開して `index.html` を開けば使えます。
 - 選んだファイルはブラウザの中だけで処理され、どこにも送信されません。
 - 計算はアプリ (共通コア `core/`) と同じ結果になるようにしてあります。
 
@@ -100,6 +101,6 @@ fs.writeFileSync('spectrum.csv', core.toCsv(spectrum, ''));
 node --test web/test/core.test.js web/test/server.test.js
 ```
 
-リリースでは web 版一式を zip にして GitHub Releases に置きます。手順は [docs/releasing.md](../docs/releasing.md) にあります。
+web 版一式は zip にして [GitHub Releases](https://github.com/igarinpiano/fukasis/releases) で配布しています。新しいバージョンを出す手順は [docs/releasing.md](../docs/releasing.md) にあります。
 
 テストでは、アプリの C++ をそのまま動かして作った正解データ (`testdata/`) と出力が一致することを確かめています。
