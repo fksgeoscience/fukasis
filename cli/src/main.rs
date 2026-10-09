@@ -24,13 +24,15 @@ fukasis - FUKASIS-app で撮影したデータを PC で処理する
   fukasis calib --check <calib.csv> [--fol <x>]
       既存の校正データで出力される波長の範囲を確かめる
 
-  fukasis csv --image <stacked.tif|darked.tif> --calib <calib.csv> --sensitivity <sensit.csv>
+  fukasis csv --image <stacked.tif|darked.tif> --calib <calib.csv>
+              (--sensitivity <sensit.csv> | --no-sensitivity)
               [--fol <x>|auto] [--metadata <metadata.csv>] [-o spectrum.csv]
               [--band-width <px>] [--band-center <0-1>] [--cfa <RGGB|GRBG|GBRG|BGGR|MONO>]
       スペクトルを csv に出力する (アプリの csv 画面). -o を省くと標準出力に書く.
       --fol を省くか auto にすると 0次光の位置を自動で推定する.
       --band-width / --band-center は読む帯の幅と中心 (既定は 80 px, 画像の中央),
-      --cfa はカラーフィルタ配列 (既定は metadata に記録されたもの, 無ければ GBRG)
+      --cfa はカラーフィルタ配列 (既定は metadata に記録されたもの, 無ければ GBRG).
+      --no-sensitivity を付けると感度校正をしない (感度データは要らない)
 
   fukasis graph <spectrum.csv> [<spectrum.csv> ...] [-o spectrum.svg] [--title <text>] [--keep-outliers]
       スペクトルのグラフを SVG に出力する (アプリの view 画面). 8 本まで重ねて描ける.
@@ -260,12 +262,21 @@ fn cmd_csv(args: &[String]) -> Result<(), String> {
             "--cfa",
             "--output",
         ],
-        &[],
+        &["--no-sensitivity"],
     )?;
     let image_path = a.require("--image")?;
     let img = read_image(image_path)?;
     let cal = calib::parse_calibration(&read_text(a.require("--calib")?)?)?;
-    let sensitivity = spectrum::parse_sensitivity(&read_text(a.require("--sensitivity")?)?)?;
+    // --no-sensitivity のときは感度校正をしないので, 感度データは要らない
+    let no_sensitivity = a.has("--no-sensitivity");
+    if no_sensitivity && a.get("--sensitivity").is_some() {
+        return Err("--no-sensitivity と --sensitivity は同時に指定できません".to_string());
+    }
+    let sensitivity = if no_sensitivity {
+        spectrum::Sensitivity::default()
+    } else {
+        spectrum::parse_sensitivity(&read_text(a.require("--sensitivity")?)?)?
+    };
     let fol = match a.get("--fol") {
         Some(v) if v != "auto" => parse_position(v, "--fol")?.round() as usize,
         _ => {
@@ -284,7 +295,10 @@ fn cmd_csv(args: &[String]) -> Result<(), String> {
         None => image_path.to_string(),
     };
 
-    let mut options = spectrum::Options::default();
+    let mut options = spectrum::Options {
+        no_sensitivity,
+        ..spectrum::Options::default()
+    };
     if let Some(v) = a.get("--band-width") {
         options.band_width = v
             .parse()
@@ -314,7 +328,13 @@ fn cmd_csv(args: &[String]) -> Result<(), String> {
 
     report_calibration(&cal, fol);
     let result = spectrum::extract_with(&img, &cal, &sensitivity, fol, &options)?;
-    let text = spectrum::to_csv(&result, &header);
+    // 感度校正をしていないことは, あとで分かるように csv の 1 行目に残す
+    let mut first_line = header.lines().next().unwrap_or("").to_string();
+    if no_sensitivity {
+        first_line.push_str(spectrum::NO_SENSITIVITY_MARK);
+        eprintln!("感度校正はしていません (--no-sensitivity)");
+    }
+    let text = spectrum::to_csv(&result, &first_line);
     match a.get("--output") {
         Some(o) => {
             write_file(Path::new(o), text.as_bytes())?;
