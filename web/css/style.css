@@ -314,6 +314,11 @@ input[type='file'] {
   cursor: crosshair;
 }
 
+/* 参照線の名前を書く段の分だけ高くする */
+.viewer.with-refs .viewer-profile {
+  height: 170px;
+}
+
 .viewer-band {
   position: absolute;
   left: 0;

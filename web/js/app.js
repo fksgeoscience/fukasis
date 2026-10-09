@@ -166,6 +166,44 @@
 
   // ---------------------------------------------------------------- calibration
 
+  // 主な輝線・吸収線 (nm). 同定の手がかり用
+  const REFERENCE_LINES = [
+    { nm: 410.2, label: 'Hδ' },
+    { nm: 434.0, label: 'Hγ' },
+    { nm: 435.8, label: 'Hg' },
+    { nm: 486.1, label: 'Hβ' },
+    { nm: 495.9, label: '[O III]' },
+    { nm: 500.7, label: '[O III]' },
+    { nm: 517.3, label: 'Mg b' },
+    { nm: 546.1, label: 'Hg' },
+    { nm: 589.3, label: 'Na D' },
+    { nm: 611.6, label: 'Eu' },
+    { nm: 630.0, label: '[O I]' },
+    { nm: 656.3, label: 'Hα' },
+    { nm: 686.7, label: 'O₂ B' },
+  ];
+
+  // 3 波長型の蛍光灯の輝線 (nm). アプリの calibration 画面にある 6 本
+  const LAMP_LINES = [
+    { nm: 404.7, label: 'Hg' },
+    { nm: 435.8, label: 'Hg' },
+    { nm: 546.1, label: 'Hg' },
+    { nm: 588.0, label: '' },
+    { nm: 611.6, label: 'Eu' },
+    { nm: 631.1, label: '' },
+  ];
+
+  // calibration タブに出す参照線の組. 'all' は両方 (同じ波長は 1 本にまとめる)
+  function referenceSet(mode) {
+    if (mode === 'lamp') return LAMP_LINES;
+    if (mode === 'sky') return REFERENCE_LINES;
+    if (mode !== 'all') return [];
+    const seen = new Set();
+    return LAMP_LINES.concat(REFERENCE_LINES)
+      .filter((line) => !seen.has(line.nm) && seen.add(line.nm))
+      .sort((a, b) => a.nm - b.nm);
+  }
+
   // 輝線の既定値は 3 波長型の蛍光灯のもの (アプリと同じ)
   const DEFAULT_LINES = [435.8, 546.1, 588.0, 611.6];
   const calib = {
@@ -173,7 +211,9 @@
     fol: null,
     lines: DEFAULT_LINES.map((nm) => ({ x: null, nm })),
     active: 'fol', // 'fol' か, lines の添字
+    fit: null, // 今の校正式と出力範囲 {f, range}. まだ無ければ null
   };
+  const REFS_KEY = 'fukasis.calibRefs';
   const lineColor = (i) => 'var(--series-' + ((i % 7) + 1) + ')';
   const FOL_COLOR = 'var(--series-8)';
 
@@ -187,6 +227,16 @@
     onSelect(id) {
       calib.active = id;
       refreshCalib();
+    },
+    // ポインタの位置と, 校正ができていればその波長を出す
+    onHover(x) {
+      let text = '';
+      if (x !== null) {
+        const tt = calib.fol === null ? null : calib.fol - x;
+        const inRange = calib.fit && tt !== null && tt >= calib.fit.range.lo && tt <= calib.fit.range.hi;
+        text = inRange ? t('calib.readoutNm', x, core.polyAt(calib.fit.f, tt).toFixed(1)) : t('calib.readout', x);
+      }
+      $('calib-readout').textContent = text;
     },
   });
 
@@ -208,16 +258,20 @@
   function wavelengthTicks(f, range, fol) {
     const ticks = [];
     for (let nm = 400; nm <= 700; nm += 50) {
-      for (let tt = range.lo; tt < range.hi; tt++) {
-        const a = core.polyAt(f, tt) - nm;
-        const b = core.polyAt(f, tt + 1) - nm;
-        if (a === 0 || a * b < 0) {
-          ticks.push({ x: fol - tt, label: String(nm) });
-          break;
-        }
-      }
+      const tt = core.positionOfWavelength(f, range, nm);
+      if (tt !== null) ticks.push({ x: fol - tt, label: String(nm) });
     }
     return ticks;
+  }
+
+  // 校正式から, 既知の輝線が来るはずの位置を求める (出力範囲の外のものは出さない)
+  function referenceMarks(f, range, fol, lines) {
+    const marks = [];
+    for (const line of lines) {
+      const tt = core.positionOfWavelength(f, range, line.nm);
+      if (tt !== null) marks.push({ x: fol - tt, label: (line.label ? line.label + ' ' : '') + line.nm.toFixed(1) });
+    }
+    return marks;
   }
 
   function renderCalibTable() {
@@ -242,11 +296,16 @@
       });
       xCell.append(xInput);
       const nmCell = document.createElement('td');
+      // 当てはめた式との差 (この線の位置での波長 - 入力した波長)
+      const residualCell = document.createElement('td');
+      residualCell.dataset.role = 'residual';
+      residualCell.className = 'note';
       const tools = document.createElement('td');
       if (line) {
         const nmInput = document.createElement('input');
         nmInput.type = 'number';
         nmInput.step = '0.1';
+        nmInput.setAttribute('list', 'calib-nm-list');
         nmInput.value = String(line.nm);
         nmInput.addEventListener('input', () => {
           line.nm = nmInput.value === '' ? NaN : Number(nmInput.value);
@@ -268,7 +327,7 @@
         });
         tools.append(snap, ' ', remove);
       }
-      tr.append(name, xCell, nmCell, tools);
+      tr.append(name, xCell, nmCell, residualCell, tools);
       tr.addEventListener('focusin', () => selectCalibRow(id));
       tr.addEventListener('click', () => selectCalibRow(id));
       body.append(tr);
@@ -327,14 +386,21 @@
     // 校正の結果
     const cal = currentCalibration();
     const warnings = [];
+    const refMode = $('calib-refs').value;
     let ticks = [];
+    let refs = [];
+    let fitted = null;
+    calib.fit = null;
     let summary = t('calib.fitNone');
     if (cal) {
       if (cal.t.some((v) => v <= 0)) warnings.push(t('calib.warnSide'));
       const f = core.fit(cal.t, cal.c);
       if (f.ok) {
+        fitted = f;
         const range = core.outputRange(f, cal.t, calib.fol);
         if (range) {
+          calib.fit = { f, range };
+          refs = referenceMarks(f, range, calib.fol, referenceSet(refMode));
           const w1 = core.polyAt(f, range.lo);
           const w2 = core.polyAt(f, range.hi);
           const residual = Math.max(...cal.t.map((tt, i) => Math.abs(core.polyAt(f, tt) - cal.c[i])));
@@ -355,8 +421,24 @@
       }
     }
     $('calib-fit').textContent = summary;
+    if (refMode !== 'none' && !calib.fit) warnings.push(t('calib.refsNeedFit'));
     setMessages($('calib-message'), 'warning', warnings);
     calibViewer.setScaleTicks(ticks);
+    calibViewer.setReferenceLines(refs);
+
+    // 線ごとの, 当てはめとの差. 1 本だけ大きければ, その線の位置か波長が違っている
+    $('calib-lines')
+      .querySelectorAll('tr')
+      .forEach((tr) => {
+        const cell = tr.querySelector('td[data-role="residual"]');
+        const line = tr.dataset.id === 'fol' ? null : calib.lines[Number(tr.dataset.id)];
+        let text = '';
+        if (fitted && line && line.x !== null && Number.isFinite(line.nm)) {
+          const d = core.polyAt(fitted, calib.fol - line.x) - line.nm;
+          text = (d >= 0 ? '+' : '−') + Math.abs(d).toFixed(2);
+        }
+        cell.textContent = text;
+      });
     $('calib-save').disabled = !cal;
     $('calib-to-csv').disabled = !cal;
   }
@@ -379,6 +461,28 @@
   });
   $('calib-zoom').addEventListener('change', () => calibViewer.setZoom(Number($('calib-zoom').value)));
   $('calib-peaks').addEventListener('change', refreshCalib);
+  // 参照線の選択は次に開いたときも覚えておく
+  try {
+    const remembered = localStorage.getItem(REFS_KEY);
+    if (['lamp', 'sky', 'all'].includes(remembered)) $('calib-refs').value = remembered;
+  } catch (e) {
+    // 覚えられない環境では毎回「表示しない」から始まる
+  }
+  $('calib-refs').addEventListener('change', () => {
+    try {
+      localStorage.setItem(REFS_KEY, $('calib-refs').value);
+    } catch (e) {
+      // 覚えられなくても表示はできる
+    }
+    refreshCalib();
+  });
+  // 波長の欄の候補
+  referenceSet('all').forEach((line) => {
+    const option = document.createElement('option');
+    option.value = String(line.nm);
+    if (line.label) option.label = line.label + ' ' + line.nm;
+    $('calib-nm-list').append(option);
+  });
   $('calib-add').addEventListener('click', () => {
     calib.lines.push({ x: null, nm: NaN });
     calib.active = calib.lines.length - 1;
@@ -582,22 +686,6 @@
 
   // ---------------------------------------------------------------- graph
 
-  // 主な輝線・吸収線 (nm). 同定の手がかり用
-  const REFERENCE_LINES = [
-    { nm: 410.2, label: 'Hδ' },
-    { nm: 434.0, label: 'Hγ' },
-    { nm: 435.8, label: 'Hg' },
-    { nm: 486.1, label: 'Hβ' },
-    { nm: 495.9, label: '[O III]' },
-    { nm: 500.7, label: '[O III]' },
-    { nm: 517.3, label: 'Mg b' },
-    { nm: 546.1, label: 'Hg' },
-    { nm: 589.3, label: 'Na D' },
-    { nm: 611.6, label: 'Eu' },
-    { nm: 630.0, label: '[O I]' },
-    { nm: 656.3, label: 'Hα' },
-    { nm: 686.7, label: 'O₂ B' },
-  ];
   const TABLE_ROWS = 1000;
   const graph = { files: [] }; // {name, x, y, colorIndex}. x, y はファイルに書かれていた順
   const graphChart = window.FukasisChart.create($('graph-chart'));

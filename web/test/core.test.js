@@ -201,6 +201,31 @@ test('スペクトル出力: 出力できないときは理由を返す', () => 
   assert.throws(() => core.extract(img, { t: good.t, c: [1430, 1490, 1550, 1610] }, s, 60), /入る点がありません/);
 });
 
+test('校正式から, 波長に対応する位置を求める', () => {
+  // 0次光からの距離 t と波長が直線の関係 (t = 100 で 400 nm, 1 px あたり 1 nm)
+  const t = [130, 200, 260, 330];
+  const f = core.fit(t, t.map((v) => 300 + v));
+  const range = core.outputRange(f, t, 600);
+  assert.ok(Math.abs(core.positionOfWavelength(f, range, 546.1) - 246.1) < 1e-6);
+  assert.ok(Math.abs(core.positionOfWavelength(f, range, 435.8) - 135.8) < 1e-6);
+  // 出力範囲 (400 - 700 nm) の外や, 校正が無いときは null
+  assert.equal(core.positionOfWavelength(f, range, 350), null);
+  assert.equal(core.positionOfWavelength(f, range, 750), null);
+  assert.equal(core.positionOfWavelength(f, null, 546.1), null);
+  assert.equal(core.positionOfWavelength(core.fit([1], [1]), range, 546.1), null);
+
+  // 途中で折り返す校正では, 折り返した先 (範囲の外) の波長は出さない
+  const cal = core.parseCalibration(testdata('calib_truncated.csv'));
+  const g = core.fit(cal.t, cal.c);
+  const cut = core.outputRange(g, cal.t, FOL);
+  const lo = Math.min(core.polyAt(g, cut.lo), core.polyAt(g, cut.hi));
+  const hi = Math.max(core.polyAt(g, cut.lo), core.polyAt(g, cut.hi));
+  const mid = core.positionOfWavelength(g, cut, (lo + hi) / 2);
+  assert.ok(mid > cut.lo && mid < cut.hi);
+  assert.ok(Math.abs(core.polyAt(g, mid) - (lo + hi) / 2) < 0.05);
+  assert.equal(core.positionOfWavelength(g, cut, hi + 5), null);
+});
+
 test('感度データ: 波長順に並べ, 間は線形補間, 範囲の外は端の値', () => {
   const s = core.parseSensitivity('a\nb\n500,2,2,2\n400,1,1,1,9,9\n600,4,4,4\n');
   assert.deepEqual(s.wavelength, [400, 500, 600]);

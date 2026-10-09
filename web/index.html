@@ -84,9 +84,19 @@
                 <option value="8">×8</option>
               </select></label
             >
+            <label
+              ><span data-i18n="calib.refs"></span>
+              <select id="calib-refs">
+                <option value="none" data-i18n="calib.refsNone"></option>
+                <option value="lamp" data-i18n="calib.refsLamp"></option>
+                <option value="sky" data-i18n="calib.refsSky"></option>
+                <option value="all" data-i18n="calib.refsAll"></option>
+              </select></label
+            >
             <span class="note" data-i18n="calib.hint"></span>
           </div>
           <div id="calib-viewer"></div>
+          <p class="note" id="calib-readout" style="margin: 4px 0 0; min-height: 1.5em"></p>
 
           <div class="grid2" style="margin-top: 12px">
             <div>
@@ -96,11 +106,13 @@
                     <th data-i18n="calib.colMarker"></th>
                     <th data-i18n="calib.colX"></th>
                     <th data-i18n="calib.colNm"></th>
+                    <th data-i18n="calib.colResidual"></th>
                     <th></th>
                   </tr>
                 </thead>
                 <tbody id="calib-lines"></tbody>
               </table>
+              <datalist id="calib-nm-list"></datalist>
               <div class="row" style="margin-top: 8px">
                 <button class="small" id="calib-add" data-i18n="calib.add"></button>
                 <button class="small" id="calib-auto-fol" data-i18n="common.autoFol"></button>

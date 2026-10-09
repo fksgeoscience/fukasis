@@ -396,6 +396,19 @@
     return f;
   }
 
+  // 校正式 f で波長が nm になる, 0次光からの距離 t (px, 小数). 出力範囲 range の中に無ければ null.
+  // range の中では波長は単調なので, 見つかるのは 1 か所だけ
+  function positionOfWavelength(f, range, nm) {
+    if (!f || !f.ok || !range) return null;
+    for (let t = range.lo; t < range.hi; t++) {
+      const a = polyAt(f, t) - nm;
+      const b = polyAt(f, t + 1) - nm;
+      if (a === 0) return t;
+      if (a * b < 0) return t + a / (a - b);
+    }
+    return polyAt(f, range.hi) === nm ? range.hi : null;
+  }
+
   // スペクトルとして出力する t の範囲 {lo, hi, cutLow, cutHigh} を決める. t は 1 .. size-2 を動く.
   // 校正点の真ん中から両側へ, 波長が単調に変化している間だけ広げ,
   // そのうち波長が (WAVELENGTH_MIN, WAVELENGTH_MAX) に入る部分を返す. 出力するものが無ければ null.
@@ -849,6 +862,7 @@
     polyAt,
     fit,
     outputRange,
+    positionOfWavelength,
     parseSensitivity,
     sensitivityAt,
     parseCfa,
