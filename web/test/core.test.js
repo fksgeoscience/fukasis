@@ -12,12 +12,14 @@ const testdata = (name) => fs.readFileSync(path.join(__dirname, '..', '..', 'tes
 const FOL = 390;
 const darked = () => core.subtract(core.synthImage(12345, true), core.synthImage(777, false));
 
-// アプリの C++ (makecsv) をそのまま動かして作った正解データと一致することを確かめる
-function assertMatchesGolden(calibration, expected) {
+// アプリの C++ (共通コアの makeSpectrum) をそのまま動かして作った正解データと一致することを確かめる
+function assertMatchesGolden(calibration, expected, metadata = 'metadata.csv') {
   const cal = core.parseCalibration(testdata(calibration));
   const sensitivity = core.parseSensitivity(testdata('sensitivity.csv'));
-  const result = core.extract(darked(), cal, sensitivity, FOL);
-  const actual = core.toCsv(result, testdata('metadata.csv')).trimEnd().split('\n');
+  const header = testdata(metadata);
+  // アプリと同じく, metadata に記録されたカラーフィルタ配列があればそれを使う
+  const result = core.extract(darked(), cal, sensitivity, FOL, { cfa: core.cfaFromMetadata(header) || undefined });
+  const actual = core.toCsv(result, header).trimEnd().split('\n');
   const want = testdata(expected).trimEnd().split('\n');
   assert.equal(actual.length, want.length, '行数が違う');
   // ヘッダーの 2 行は完全に一致する
@@ -167,6 +169,47 @@ test('校正データの読み書き', () => {
   assert.equal(core.formatCalibration(cal), text);
   assert.throws(() => core.parseCalibration('1,2,3\n1,2'));
   assert.throws(() => core.parseCalibration(''));
+});
+
+test('スペクトル出力: metadata に記録されたカラーフィルタ配列を使う', () => {
+  // 合成画像の並びは GBRG のまま, RGGB として読む
+  assertMatchesGolden('calib_4pt.csv', 'expected_spectrum_rggb.csv', 'metadata_rggb.csv');
+});
+
+test('カラーフィルタ配列', () => {
+  const at = (cfa) => [core.channelOf(0, 0, cfa), core.channelOf(1, 0, cfa), core.channelOf(0, 1, cfa), core.channelOf(1, 1, cfa)];
+  assert.deepEqual(at(undefined), [1, 0, 2, 1]); // 既定は GBRG
+  assert.deepEqual(at('GBRG'), [1, 0, 2, 1]);
+  assert.deepEqual(at('RGGB'), [2, 1, 1, 0]);
+  assert.deepEqual(at('GRBG'), [1, 2, 0, 1]);
+  assert.deepEqual(at('BGGR'), [0, 1, 1, 2]);
+  assert.deepEqual(at('MONO'), [1, 1, 1, 1]);
+  assert.equal(core.parseCfa('gbrg'), 'GBRG');
+  assert.equal(core.parseCfa('xyz'), null);
+  assert.equal(core.cfaFromMetadata('seq, 2026-10-08T00:00:00Z,  ISO 800 , cfa RGGB, device X'), 'RGGB');
+  assert.equal(core.cfaFromMetadata('seq, 2026-10-08T00:00:00Z,  ISO 800'), null);
+});
+
+test('スペクトル出力: 出力できないときは理由を返す', () => {
+  const img = { width: 64, height: 8, data: new Float32Array(64 * 8) };
+  const s = core.parseSensitivity('a\nb\n400,1,1,1\n700,1,1,1\n');
+  const good = { t: [10, 20, 30, 40], c: [430, 490, 550, 610] };
+  assert.throws(() => core.extract(img, good, s, 0), /0次光/);
+  assert.throws(() => core.extract(img, good, s, 64), /0次光/);
+  assert.throws(() => core.extract(img, { t: [10, 10, 30, 40], c: good.c }, s, 60), /重複/);
+  assert.throws(() => core.extract(img, good, s, 60), /強度/); // 真っ黒な画像
+  assert.throws(() => core.extract(img, { t: good.t, c: [1430, 1490, 1550, 1610] }, s, 60), /入る点がありません/);
+});
+
+test('感度データ: 波長順に並べ, 間は線形補間, 範囲の外は端の値', () => {
+  const s = core.parseSensitivity('a\nb\n500,2,2,2\n400,1,1,1,9,9\n600,4,4,4\n');
+  assert.deepEqual(s.wavelength, [400, 500, 600]);
+  assert.equal(core.sensitivityAt(s, 450), 4.5);
+  assert.equal(core.sensitivityAt(s, 500), 6);
+  assert.equal(core.sensitivityAt(s, 550), 9);
+  assert.equal(core.sensitivityAt(s, 300), 3);
+  assert.equal(core.sensitivityAt(s, 900), 12);
+  assert.throws(() => core.parseSensitivity('a\nb\n400,1,1,1\n410,x,1,1\n'));
 });
 
 test('感度データ: ヘッダー 2 行を読み飛ばす', () => {

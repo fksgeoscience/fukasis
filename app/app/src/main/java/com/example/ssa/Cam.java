@@ -109,6 +109,11 @@ public class Cam {
     private String sequenceName = "test";
     private int currentCount = 0;
 
+    // 白飛びチェック
+    private int whiteLevel = 0; // 0 なら不明 (チェックしない)
+    private volatile boolean checkOnly = false; // 試し撮り中 (保存もスタックもしない)
+    private int saturatedFrames = 0; // 今の capture sequence で白飛びしていた枚数
+
     // constructor
     public Cam(Activity activity, String camId, SoundPool soundPool, int alarmSound, int shatterSound) {
         this.activity = activity;
@@ -156,7 +161,7 @@ public class Cam {
                 null)) {
             if (cursor != null && cursor.moveToFirst()) {
                 long id = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.MediaColumns._ID));
-                // exsists
+                // exists
                 return ContentUris.withAppendedId(collection, id);
             }
         }
@@ -180,7 +185,7 @@ public class Cam {
         Uri uri = findUri(resolver, path, name);
 
         if (uri == null) {
-            // does not exsists
+            // does not exist
             values.put(MediaStore.MediaColumns.DISPLAY_NAME, name);
             values.put(MediaStore.MediaColumns.MIME_TYPE, type);
             values.put(MediaStore.MediaColumns.RELATIVE_PATH, path);
@@ -220,6 +225,8 @@ public class Cam {
             }
             maxW = largestRaw.getWidth();
             maxH = largestRaw.getHeight();
+            Integer white = camCharacteristics.get(CameraCharacteristics.SENSOR_INFO_WHITE_LEVEL);
+            whiteLevel = (white != null) ? white : 0;
             rawImgReader = ImageReader.newInstance(maxW, maxH, ImageFormat.RAW_SENSOR, 2);
             rawImgReader.setOnImageAvailableListener(onRawImageAvailableListener, backgroundHandler);
 
@@ -264,6 +271,7 @@ public class Cam {
             isCapturing = false;
             postError("撮影が中断されました");
         }
+        checkOnly = false;
         synchronized (this) {
             if (pendingImage != null) {
                 pendingImage.close();
@@ -411,7 +419,7 @@ public class Cam {
 
     // 撮影を開始できたら true. カメラの準備ができていなければ false
     public boolean startCaptureSession(long expo, int iso, float fd, int qty, String name, TextView indicator) {
-        if (camDev == null || capSession == null || rawImgReader == null || isCapturing)
+        if (camDev == null || capSession == null || rawImgReader == null || isCapturing || checkOnly)
             return false;
 
         try {
@@ -428,6 +436,7 @@ public class Cam {
         this.indicator = indicator;
         currentCount = 0;
         consecutiveFailures = 0;
+        saturatedFrames = 0;
         Log.d("a", String.format("Capturing…\n%s, %d ms, %d, %f\n%d/%d done", name, expo, iso, fd, currentCount, qty));
         // indicator.setText(String.format("Capturing…\n%s, %d ms, %d, %f\n%d/%d
         // done",name,expo,iso,fd,currentCount,qty));
@@ -464,11 +473,8 @@ public class Cam {
             @Override
             public void run() {
                 setStatus(StatusType.ERROR, message, captureStatusIcon, indicator);
-                Button capBtn = activity.findViewById(R.id.cap);
-                if (capBtn != null) {
-                    capBtn.setAlpha(1.0f);
-                    capBtn.setEnabled(true);
-                }
+                enableButton(R.id.cap);
+                enableButton(R.id.sat_check);
             }
         });
     }
@@ -610,8 +616,8 @@ public class Cam {
             indicator.post(new Runnable() {
                 @Override
                 public void run() {
-                    String message = String.format("Capture Sequence completed!\nSequence: %s, \nExposure: %d ms, ISO: %d, Focus: %f\n%d/%d done",
-                             sequenceName, expo, iso, fd, currentCount, sequenceLength);
+                    String message = withSaturationWarning(activity.getString(R.string.status_capture_completed,
+                             sequenceName, expo, iso, fd, currentCount, sequenceLength));
                     setStatus(StatusType.SUCCESS, message, captureStatusIcon, indicator);
 
                     // Context 経由で Activity から CAPTURE ボタンを取得して透明度を戻す
@@ -623,6 +629,7 @@ public class Cam {
                             capBtn.setAlpha(1.0f); // ボタンの透明度を元に戻す
                             capBtn.setEnabled(true); // もし無効化（Disabled）していた場合はタップ可能に戻す
                         }
+                        enableButton(R.id.sat_check);
                     }
                 }
             });
@@ -631,7 +638,7 @@ public class Cam {
             indicator.post(new Runnable() {
                 @Override
                 public void run() {
-                    String message = String.format("Capturing…\nSequence: %s, \nExposure: %d ms, ISO: %d, Focus: %f\n%d/%d done", sequenceName, expo, iso, fd, currentCount, sequenceLength);
+                    String message = withSaturationWarning(activity.getString(R.string.status_capturing, sequenceName, expo, iso, fd, currentCount, sequenceLength));
                     setStatus(StatusType.LOADING, message, captureStatusIcon, indicator);
 
                 }
@@ -648,6 +655,123 @@ public class Cam {
         return;
     }
     
+    // 白飛びチェック: 今の設定で 1 枚だけ試し撮りし, 一次光領域の RAW 値を調べる (保存はしない)。
+    // 試し撮りを始められたら true
+    public boolean startSaturationCheck(long expo, int iso, float fd, TextView indicator) {
+        if (camDev == null || capSession == null || rawImgReader == null || isCapturing || checkOnly) {
+            return false;
+        }
+        this.indicator = indicator;
+        try {
+            capSession.abortCaptures();
+
+            CaptureRequest.Builder builder = camDev.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE);
+            builder.addTarget(rawImgReader.getSurface());
+            builder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_OFF);
+            builder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, expo);
+            builder.set(CaptureRequest.SENSOR_SENSITIVITY, iso);
+            builder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_OFF);
+            builder.set(CaptureRequest.LENS_FOCUS_DISTANCE, fd);
+
+            checkOnly = true;
+            capSession.capture(builder.build(), checkCallback, backgroundHandler);
+            return true;
+        } catch (CameraAccessException | IllegalStateException e) {
+            e.printStackTrace();
+            checkOnly = false;
+            return false;
+        }
+    }
+
+    // 試し撮りの後始末。止まっているプレビューを再開し, 結果を表示してボタンを戻す
+    private void finishSaturationCheck(final SaturationChecker.Result result) {
+        checkOnly = false;
+        try {
+            if (capSession != null) {
+                capSession.setRepeatingRequest(capRequestBuilder.build(), null, backgroundHandler);
+            }
+        } catch (CameraAccessException | IllegalStateException e) {
+            e.printStackTrace();
+        }
+        indicator.post(new Runnable() {
+            @Override
+            public void run() {
+                if (result == null) {
+                    setStatus(StatusType.ERROR, activity.getString(R.string.error_saturation_check_failed),
+                            captureStatusIcon, indicator);
+                } else {
+                    setStatus(result.anySaturated() ? StatusType.ERROR : StatusType.SUCCESS,
+                            saturationMessage(result), captureStatusIcon, indicator);
+                }
+                enableButton(R.id.cap);
+                enableButton(R.id.sat_check);
+            }
+        });
+    }
+
+    private final CameraCaptureSession.CaptureCallback checkCallback = new CameraCaptureSession.CaptureCallback() {
+        @Override
+        public void onCaptureFailed(@NonNull CameraCaptureSession session, @NonNull CaptureRequest request,
+                @NonNull CaptureFailure failure) {
+            if (checkOnly) {
+                finishSaturationCheck(null);
+            }
+        }
+    };
+
+    // 一次光領域の白飛びを調べる。調べられなければ null
+    private SaturationChecker.Result analyzeSaturation(Image img) {
+        if (img == null || whiteLevel <= 0) {
+            return null;
+        }
+        try {
+            Image.Plane plane = img.getPlanes()[0];
+            return SaturationChecker.analyze(plane.getBuffer(), plane.getRowStride(), img.getWidth(),
+                    img.getHeight(), whiteLevel, cfa);
+        } catch (RuntimeException e) {
+            // チェックの失敗で撮影そのものを止めない
+            e.printStackTrace();
+            return null;
+        }
+    }
+
+    private String saturationMessage(SaturationChecker.Result result) {
+        String message = activity.getString(R.string.saturation_peaks,
+                result.peakPercent(SaturationChecker.R),
+                result.peakPercent(SaturationChecker.G),
+                result.peakPercent(SaturationChecker.B));
+        if (!result.anySaturated()) {
+            return message + "\n" + activity.getString(R.string.saturation_ok);
+        }
+        String[] names = { "R", "G", "B" };
+        StringBuilder channels = new StringBuilder();
+        for (int ch = 0; ch < names.length; ch++) {
+            if (result.isSaturated(ch)) {
+                if (channels.length() > 0) {
+                    channels.append(", ");
+                }
+                channels.append(names[ch]);
+            }
+        }
+        return message + "\n" + activity.getString(R.string.saturation_warning, channels.toString());
+    }
+
+    // capture sequence 中に白飛びしたフレームがあれば, その枚数を status に書き足す
+    private String withSaturationWarning(String message) {
+        if (saturatedFrames > 0) {
+            message += "\n" + activity.getString(R.string.saturation_frames_warning, saturatedFrames, currentCount);
+        }
+        return message;
+    }
+
+    private void enableButton(int id) {
+        Button button = activity.findViewById(id);
+        if (button != null) {
+            button.setAlpha(1.0f);
+            button.setEnabled(true);
+        }
+    }
+
     // ステータス用の enum
     public enum StatusType {
         SUCCESS,
@@ -731,6 +855,15 @@ public class Cam {
         public void onImageAvailable(ImageReader reader) { // ?キャプチャ？
             Log.v("a", "img available");
             Image img = reader.acquireNextImage();
+            if (checkOnly) {
+                // 白飛びチェック用の試し撮り (保存もスタックもしない)
+                SaturationChecker.Result result = analyzeSaturation(img);
+                if (img != null) {
+                    img.close();
+                }
+                finishSaturationCheck(result);
+                return;
+            }
             if (img == null) {
                 return;
             }
@@ -773,12 +906,15 @@ public class Cam {
         }
 
         String accumulateError;
+        boolean saturated = false;
         try {
             Log.d("a", "end capture No." + currentCount);
             // left vol. right vol. priority loop speed
             soundPool.play(shatterSound, 1.0f, 1.0f, 0, 0, 1);
 
             saveDNG(img, result);
+            SaturationChecker.Result saturation = analyzeSaturation(img);
+            saturated = saturation != null && saturation.anySaturated();
             Image.Plane plane = img.getPlanes()[0];
             ByteBuffer buff = plane.getBuffer();
 
@@ -803,13 +939,16 @@ public class Cam {
         } else {
             consecutiveFailures = 0;
             currentCount++;
+            if (saturated) {
+                saturatedFrames++;
+            }
         }
 
         indicator.post(new Runnable() {
             @Override
             public void run() {
-                String message = String.format("Capturing…\n%s, \n%d ms, %d, %f\n%d/%d done", sequenceName,
-                        expo, iso, fd, currentCount, sequenceLength);
+                String message = withSaturationWarning(activity.getString(R.string.status_capturing, sequenceName,
+                        expo, iso, fd, currentCount, sequenceLength));
                 setStatus(StatusType.LOADING, message, captureStatusIcon, indicator);
             }
         });
@@ -832,19 +971,19 @@ public class Cam {
         // String selection = MediaStore.MediaColumns.DISPLAY_NAME + "=?";
         // String[] selectionArgs = new String[]{ currentCount + ".dng" };
 
-        //// search whether same file exsists.
+        //// search whether same file exists.
         // try(Cursor c = resolver.query(collection,new
         //// String[]{MediaStore.MediaColumns._ID},selection,selectionArgs,null)){
         // if(c != null && c.moveToFirst()){
         // long id = c.getLong(c.getColumnIndexOrThrow(MediaStore.MediaColumns._ID));
-        // // exsists
+        // // exists
         // uri = ContentUris.withAppendedId(collection, id);
         // }
         // }
         //
 
         // if(uri == null){
-        // // does not exsists
+        // // does not exist
         // ContentValues values = new ContentValues();
         // values.put(MediaStore.MediaColumns.DISPLAY_NAME, currentCount + ".dng");
         // values.put(MediaStore.MediaColumns.MIME_TYPE, "image/x-adobe-dng");

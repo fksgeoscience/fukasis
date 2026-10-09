@@ -41,10 +41,14 @@
         </LinearLayout>
 
 
-        <LinearLayout
+        <ScrollView
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:layout_weight="0.5"
+            android:layout_weight="0.5">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
             android:orientation="vertical">
 
             <Space
@@ -55,7 +59,7 @@
                 android:id="@+id/focus_txt"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Focus" />
+                android:text="@string/focus_label" />
 
      <LinearLayout
     android:layout_width="match_parent"
@@ -131,14 +135,14 @@
                 android:id="@+id/expo_txt"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Exposure:100 ms" />
+                android:text="@string/exposure_label" />
 
             <Switch
                 android:id="@+id/expo_switch"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:checked="false"
-                android:text="long" />
+                android:text="@string/switch_long" />
 
             <Space
                 android:layout_width="match_parent"
@@ -179,7 +183,7 @@
                 android:id="@+id/zoomFF"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="ZOOM FOR FOCUSING" />
+                android:text="@string/zoom_for_focusing" />
 
             <Space
                 android:layout_width="match_parent"
@@ -189,7 +193,7 @@
                 android:id="@+id/zoomFP"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="ZOOM FOR POINTING" />
+                android:text="@string/zoom_for_pointing" />
 
             <Space
                 android:layout_width="match_parent"
@@ -206,7 +210,7 @@
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="0.4"
-                    android:text="sequence name" />
+                    android:text="@string/label_sequence_name" />
 
                 <EditText
                     android:id="@+id/nameText"
@@ -215,7 +219,7 @@
                     android:layout_weight="0.6"
                     android:ems="10"
                     android:inputType="text"
-                    android:hint="Name" />
+                    android:hint="@string/hint_name" />
 
             </LinearLayout>
 
@@ -230,7 +234,7 @@
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="0.4"
-                    android:text="capture quantity" />
+                    android:text="@string/label_capture_quantity" />
 
 
                 <EditText
@@ -259,7 +263,7 @@
                     android:id="@+id/cap"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="CAPTURE" />
+                    android:text="@string/capture" />
 
                 <androidx.appcompat.widget.AppCompatImageView
                     android:id="@+id/capture_status_icon"
@@ -271,21 +275,27 @@
                     android:focusable="false"
                     android:padding="4dp"
                     
-                    android:contentDescription="capture status icon" />
+                    android:contentDescription="@string/capture_status_icon" />
 
             </LinearLayout>
+
+            <Button
+                android:id="@+id/sat_check"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/check_saturation" />
 
             <TextView
                 android:id="@+id/indicator"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="status:" />
+                android:text="@string/status_idle" />
 
             <Button
                 android:id="@+id/switch_line"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="SWITCH LINE" />
+                android:text="@string/switch_line" />
                     
         <LinearLayout
         android:layout_width="match_parent"
@@ -317,6 +327,8 @@
         </LinearLayout>
 
     </LinearLayout>
+
+        </ScrollView>
     <LinearLayout
         tools:ignore="MissingConstraints"
         android:layout_width="0dp"

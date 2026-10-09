@@ -34,13 +34,14 @@ static int failures = 0;
 const int W = 3300;
 const int H = 200;
 const int FOL = 3200;
-// fol からの距離 i -> 波長 λ = 430 + (i - 1900) * 0.3 (線形分散)
-const string CALIB = "1900,2100,2300,2500\n430.000000,490.000000,550.000000,610.000000";
+// fol からの距離 i -> 波長 λ = 430.05 + (i - 1900) * 0.3 (線形分散).
+// 400 nm と 700 nm がちょうど画素の上に来ないようにしてある (来ると, 端の 1 点が入るかどうかが丸め誤差で変わる)
+const string CALIB = "1900,2100,2300,2500\n430.050000,490.050000,550.050000,610.050000";
 const string META = "test, 2026-10-01T00:00:00Z,  ISO 3200, fd 1.000000, 100 msec * 1 ";
 
 static double wavelengthAt(int i)
 {
-    return 430 + (i - 1900) * 0.3;
+    return 430.05 + (i - 1900) * 0.3;
 }
 
 struct Image
@@ -171,7 +172,7 @@ static void testSpectrumPeak()
     vector<Row> rows;
     CHECK(parseSpectrum(csv, head, rows));
     CHECK(head.size() == 2 && head[0] == META);
-    CHECK(rows.size() == 999); // 1800 < i < 2800
+    CHECK(rows.size() == 1000); // 波長が 400-700 nm になるのは 1800 <= i < 2800
     const Row *peak = nullptr;
     for (const Row &r : rows)
     {
@@ -191,12 +192,12 @@ static void testSpectrumParams()
     vector<string> head;
     vector<Row> rows;
 
-    // 切り出す範囲を狭めると出力も減る
+    // 出力する範囲は波長で決まる. 機種の目安 (tMin / tMax) を変えても出力は変わらない
     fk::SpectrumParams p;
     p.tMin = 2000;
     p.tMax = 2400;
     CHECK(spectrumOf(img, CALIB, META, sensit, FOL, csv, p).empty());
-    CHECK(parseSpectrum(csv, head, rows) && rows.size() == 399);
+    CHECK(parseSpectrum(csv, head, rows) && rows.size() == 1000);
 
     // 波長の範囲
     p = fk::SpectrumParams();
@@ -213,7 +214,7 @@ static void testSpectrumParams()
         p = fk::SpectrumParams();
         p.cfa = cfa;
         CHECK(spectrumOf(img, CALIB, META, sensit, FOL, csv, p).empty());
-        CHECK(parseSpectrum(csv, head, rows) && rows.size() == 999);
+        CHECK(parseSpectrum(csv, head, rows) && rows.size() == 1000);
         const Row *peak = nullptr;
         for (const Row &r : rows)
             if (!peak || r.val > peak->val)
@@ -235,13 +236,54 @@ static void testSpectrumParams()
 
     // 不正な範囲
     p = fk::SpectrumParams();
-    p.tMax = p.tMin;
+    p.wlMax = p.wlMin;
     CHECK(!spectrumOf(img, CALIB, META, sensit, FOL, csv, p).empty());
+}
+
+// 校正点の数と, 波長が折り返す校正データ
+static void testSpectrumCalibration()
+{
+    Image img = makeImage([](int i) { return 10 + 1000 * exp(-pow(i - 2200, 2) / (2 * 9.0)); });
+    string sensit = makeSensit(350, 800, 10, [](double) { return 1.0; });
+    string csv;
+    vector<string> head;
+    vector<Row> rows, base;
+    CHECK(spectrumOf(img, CALIB, META, sensit, FOL, csv).empty());
+    CHECK(parseSpectrum(csv, head, base));
+
+    // 同じ直線上の校正点を 6 個にしても (最小二乗), 4 個のときと同じ結果になる
+    stringstream six;
+    const int ts[6] = {1900, 2100, 2300, 2500, 2000, 2700};
+    for (int k = 0; k < 6; k++)
+        six << (k ? "," : "") << ts[k];
+    six << "\n";
+    for (int k = 0; k < 6; k++)
+        six << (k ? "," : "") << wavelengthAt(ts[k]);
+    CHECK(spectrumOf(img, six.str(), META, sensit, FOL, csv).empty());
+    CHECK(parseSpectrum(csv, head, rows) && rows.size() == base.size());
+    for (size_t k = 0; k < rows.size() && k < base.size(); k++)
+    {
+        CHECK(fabs(rows[k].wl - base[k].wl) < 1e-6);
+        CHECK(fabs(rows[k].val - base[k].val) < 1e-9);
+    }
+
+    // 校正点が 2 個なら直線, 距離と波長の数が合わなければエラー
+    CHECK(spectrumOf(img, "1900,2500\n430.05,610.05", META, sensit, FOL, csv).empty());
+    CHECK(parseSpectrum(csv, head, rows) && rows.size() == base.size());
+    CHECK(!spectrumOf(img, "1900,2100,2300,2500\n430,490,550", META, sensit, FOL, csv).empty());
+
+    // 途中で波長が折り返す校正データ: 折り返した先は出力しないので, 波長は必ず増えていく
+    CHECK(spectrumOf(img, "1900,2100,2300,2500\n430,560,600,560", META, sensit, FOL, csv).empty());
+    CHECK(parseSpectrum(csv, head, rows) && !rows.empty() && rows.size() < base.size());
+    // (CSV は有効 6 桁なので, 折り返す手前では同じ値が並ぶことがある)
+    for (size_t k = 1; k < rows.size(); k++)
+        CHECK(rows[k].wl >= rows[k - 1].wl);
+    CHECK(rows.back().wl > rows.front().wl + 50);
 }
 
 static void testSpectrumSensitivityInterpolation()
 {
-    Image img = makeImage([](int i) { return max(0, i - 1800); });
+    Image img = makeImage([](int i) { return max(0, i - 1700); });
     string csv;
     CHECK(spectrumOf(img, CALIB, META, makeSensit(350, 800, 50, [](double l) { return l / 100.0; }), FOL, csv).empty());
     vector<string> head;
@@ -249,7 +291,7 @@ static void testSpectrumSensitivityInterpolation()
     CHECK(parseSpectrum(csv, head, rows));
     if (rows.empty())
         return;
-    auto expected = [](int i) { return 3.0 * (i - 1801) / (wavelengthAt(i) / 100.0); };
+    auto expected = [](int i) { return 3.0 * (i - 1800) / (wavelengthAt(i) / 100.0); };
     const Row &a = nearestRow(rows, wavelengthAt(2000));
     const Row &b = nearestRow(rows, wavelengthAt(2600));
     CHECK(fabs((a.val / b.val) / (expected(2000) / expected(2600)) - 1.0) < 1e-3);
@@ -442,6 +484,7 @@ int main()
     testParseNumbers();
     testSpectrumPeak();
     testSpectrumParams();
+    testSpectrumCalibration();
     testSpectrumSensitivityInterpolation();
     testSpectrumErrors();
     testTiff();

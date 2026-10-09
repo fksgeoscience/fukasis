@@ -370,6 +370,14 @@ release/
 
 3次近似なので4つありますが、「2次でもいい」「4本もない…」という場合は、同じ波長を2つのバーに入力して全く同じ位置に持っていきましょう
 
+その下の2本(チェックボックス付き)は追加の校正点です。チェックを入れたものだけが5本目・6本目として使われます。\
+4本のときはその4点を通る3次式、5本以上のときは3次式を最小二乗で当てはめます。輝線が並ぶ範囲の外側(とくに611.6 nmより長波長側)にも校正点があると、端のほうの波長が安定します。
+
+**EXPORT CSV** を押すと、その校正データでcsv画面が出力する波長の範囲が表示されます。\
+スペクトルとして出力されるのは 400 nm -- 700 nm のうち、波長が位置に対して単調に変化している範囲です(校正式が折り返す部分は出力されません)。
+
+画像の下の**Brightness**バーは表示の明るさを変えるだけで、校正データには影響しません(csv画面にも同じバーがあります)。
+
 
 #### view画面 :
 <img src="./docs/imgs/view.jpg" width="30%" alt="view画面"/>
@@ -463,12 +471,20 @@ csvは最初の2行にヘッダーがあります。
 
 撮影したデータをPCでじっくり処理したい場合は、次の2つが使えます。どちらもアプリのdark / calibration / csv / view画面に相当する処理ができ、計算結果はアプリと同じになるようにしてあります。
 
-- [web版](./web/README.md) : `web/index.html`をブラウザで開くだけで使えます。画像を見ながら輝線の位置を合わせたり、複数のスペクトルを重ねて比べたりできます。
-- [コマンドライン版](./cli/README.md) : Rust製です。まとめて処理したいときやスクリプトから呼びたいときに使います。
+- [web版](./web/README.md) : **<https://igarinpiano.github.io/fukasis/>** をブラウザで開くだけで使えます。画像を見ながら輝線の位置を合わせたり、複数のスペクトルを重ねて比べたりできます。選んだファイルはブラウザの中だけで処理され、どこにも送信されません。ネットにつながない場所では、[GitHub Releases](https://github.com/igarinpiano/fukasis/releases)の`fukasis-web-<バージョン>.zip`を展開して`index.html`を開きます。
+- [コマンドライン版](./cli/README.md) : Rust製です。まとめて処理したいときやスクリプトから呼びたいときに使います。次のどちらかで入れられます（ビルド済みの実行ファイルは[GitHub Releases](https://github.com/igarinpiano/fukasis/releases)にもあります）。
+
+```bash
+npm install -g fukasis
+```
+
+```bash
+cargo install fukasis
+```
 
 `Internal_Storage/Documents/FUKASIS-app/`をPCにコピーして使ってください。
 
-配布の準備（GitHub Release / crates.io / npm）については[docs/releasing.md](./docs/releasing.md)を参照してください。
+新しいバージョンを出す手順は[docs/releasing.md](./docs/releasing.md)にあります。
 
 <br><br><br><br>
 

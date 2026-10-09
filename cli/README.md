@@ -2,11 +2,43 @@
 
 FUKASIS-app で撮影したデータを PC で処理するコマンドラインツールです。
 アプリの **dark / calibration / csv / view** の 4 画面に相当するコマンドがあります。
-まとめて処理したいときや、スクリプトから呼びたいときに使います。画像を見ながら作業するなら [web 版](../web/README.md) が向いています。
+まとめて処理したいときや、スクリプトから呼びたいときに使います。画像を見ながら作業するなら [web 版](https://igarinpiano.github.io/fukasis/) が向いています。
 
-計算はアプリ (`app/app/src/main/cpp`) と同じ結果になるようにしてあります。
+計算はアプリ (共通コア `core/`) と同じ結果になるようにしてあります。
 
-## ビルド
+## インストール
+
+次のどれかで入れられます。入れると `fukasis` コマンドが使えるようになります。
+
+**npm** ([Node.js](https://nodejs.org/) が入っている場合。ビルド済みの実行ファイルが入ります)
+
+```bash
+npm install -g fukasis
+```
+
+**cargo** ([Rust](https://www.rust-lang.org/ja/tools/install) が入っている場合。手元でビルドされます)
+
+```bash
+cargo install fukasis
+```
+
+**実行ファイルをそのまま使う**
+
+[GitHub Releases](https://github.com/igarinpiano/fukasis/releases) の `pc-v<バージョン>` から、自分の機種の `fukasis-<バージョン>-<ターゲット>` を取って展開します。
+
+| 機種 | ターゲット |
+|---|---|
+| Windows (64 bit) | `x86_64-pc-windows-msvc` |
+| Windows (ARM) | `aarch64-pc-windows-msvc` |
+| macOS (Apple シリコン) | `aarch64-apple-darwin` |
+| macOS (Intel) | `x86_64-apple-darwin` |
+| Linux (64 bit) | `x86_64-unknown-linux-gnu` (古い環境や Alpine では `-musl`) |
+| Linux (ARM 64 bit, Raspberry Pi など) | `aarch64-unknown-linux-gnu` |
+
+ほかに 32 bit の Windows / Linux、ARMv5〜v7、RISC-V、PowerPC、s390x、LoongArch、Android (Termux)、FreeBSD、NetBSD、illumos、WebAssembly (WASI) 向けもあります。
+npm で入るのはこのうち 28 機種で、それ以外は GitHub Releases から取ってください。
+
+## ソースからビルド
 
 [Rust](https://www.rust-lang.org/ja/tools/install) が必要です。外部クレートには依存していません。
 
@@ -17,7 +49,6 @@ cargo build --release
 
 `cli/target/release/fukasis` (Windows では `fukasis.exe`) ができます。
 `cargo install --path cli` (リポジトリの直下で実行) とすると、`fukasis` コマンドとしてインストールされます。
-GitHub Actions の「PC tools」が動いているリポジトリでは、その実行結果からビルド済みの実行ファイル (Linux / macOS / Windows) も取得できます。
 
 ## 使い方
 
@@ -69,6 +100,9 @@ fukasis csv --image imgs/alphaOri_260314_1/darked.tif \
 - `--fol` を省くと 0次光の位置を自動で推定します (推定した値は表示されます)。ずれている場合は `--fol <x>` で指定してください。
 - `--metadata` は任意です。省くと 1 行目には画像のファイル名が入ります。
 - `-o` を省くと標準出力に書きます。
+- カラーフィルタ配列は、metadata に記録されていればそれを使います (無ければ GBRG)。`--cfa RGGB` のように指定もできます。
+- スペクトルを読む帯は、既定では画像の中央の幅 80 px です。機種によって違う場合は `--band-width <px>` と `--band-center <0〜1>` で変えられます。
+- 出力する範囲は校正データから波長 (400〜700 nm) で決まります。出力できる点が無いときは、理由を表示して終了します。
 
 ### graph: グラフを SVG に出力
 
@@ -94,13 +128,5 @@ cargo test
 
 ## リリース
 
-GitHub Releases・crates.io (`fukasis`)・npm (`fukasis`) で配布できる形にしてあります。手順は [docs/releasing.md](../docs/releasing.md) にあります。
-公開後は、次のどれでも入れられます。
-
-```bash
-cargo install fukasis
-```
-
-```bash
-npm install -g fukasis
-```
+[GitHub Releases](https://github.com/igarinpiano/fukasis/releases)・[crates.io](https://crates.io/crates/fukasis)・[npm](https://www.npmjs.com/package/fukasis) で配布しています。
+新しいバージョンを出す手順は [docs/releasing.md](https://github.com/igarinpiano/fukasis/blob/release/docs/releasing.md) にあります。

@@ -19,7 +19,7 @@ const DESCRIPTION =
   'Process spectra captured with FUKASIS-app on a PC: dark subtraction, wavelength calibration, CSV export and SVG graphs';
 // npm の provenance は, ここがビルドしたリポジトリと一致していることを確かめる
 const REPOSITORY = { type: 'git', url: 'git+https://github.com/igarinpiano/fukasis.git' };
-const HOMEPAGE = 'https://github.com/igarinpiano/fukasis/tree/master/cli';
+const HOMEPAGE = 'https://github.com/igarinpiano/fukasis';
 const LICENSE = 'MIT';
 
 function parseArgs(argv) {

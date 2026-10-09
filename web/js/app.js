@@ -504,19 +504,20 @@
 
   function runCsv() {
     const warnings = [];
+    // 1 行目は観測の情報. metadata.csv が無ければ画像のファイル名を入れておく
+    const header = csv.metadata ? csv.metadata.text : csv.image.name;
     try {
-      csv.result = core.extract(csv.image.img, csv.calibration, csv.sensitivity.parsed, csv.fol);
+      // アプリと同じく, metadata に撮影した端末のカラーフィルタ配列が記録されていればそれを使う
+      const options = { cfa: (csv.metadata && core.cfaFromMetadata(header)) || undefined };
+      csv.result = core.extract(csv.image.img, csv.calibration, csv.sensitivity.parsed, csv.fol, options);
     } catch (e) {
       csv.result = null;
       setMessages($('csv-message'), 'error', [e.message]);
       refreshCsv();
       return;
     }
-    // 1 行目は観測の情報. metadata.csv が無ければ画像のファイル名を入れておく
-    const header = csv.metadata ? csv.metadata.text : csv.image.name;
     csv.text = core.toCsv(csv.result, header);
     csv.title = csv.metadata ? header.split(',')[0].trim() || baseName(csv.image.name) : baseName(csv.image.name);
-    if (!csv.result.wavelength.length) warnings.push(t('csv.noRows'));
     const range = csv.result.range;
     if (range && (range.cutLow || range.cutHigh)) warnings.push(t('calib.warnTruncated'));
     setMessages($('csv-message'), 'warning', warnings);

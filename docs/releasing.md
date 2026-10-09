@@ -3,6 +3,10 @@
 `web/` と `cli/` を、GitHub Releases・npm・crates.io で配布するための手順です。
 リリースは **igarinpiano/fukasis** で行います (`publish-all` はほかのリポジトリでは止まります)。
 
+最初のバージョン 0.1.0 は 2026-10-09 に公開済みです
+([GitHub Releases](https://github.com/igarinpiano/fukasis/releases)・[crates.io](https://crates.io/crates/fukasis)・[npm](https://www.npmjs.com/package/fukasis))。
+次に出すときは「[2 回目以降のリリース](#2-回目以降のリリース)」の手順です。
+
 アプリ本体 (APK) のリリースは `v*` タグ、PC 用ツールは `pc-v*` タグで、別々に行います。
 
 ## 配布物
@@ -10,6 +14,7 @@
 | 配布先 | 名前 | 中身 |
 |---|---|---|
 | GitHub Releases | `fukasis-<バージョン>-<ターゲット>.tar.gz` / `.zip` | コマンドライン版の実行ファイル (全ターゲット) |
+| GitHub Pages | <https://igarinpiano.github.io/fukasis/> | web 版 (開くだけで使える。`release` ブランチの最新) |
 | GitHub Releases | `fukasis-web-<バージョン>.zip` | web 版一式 (展開して `index.html` を開く) |
 | GitHub Releases | `SHA256SUMS` | 上のファイルのハッシュ値 |
 | crates.io | `fukasis` | コマンドライン版 (`cargo install fukasis`) とライブラリ |
@@ -38,16 +43,21 @@ Windows GNU 版、macOS universal 版、WASI 版、ビッグエンディアン�
 | `PC tools` | push / PR ごとのテスト |
 | `build-check` | 全ターゲットをビルドし、npm のパッケージを組み立てて実際に入れてみる。何も公開しない |
 | `publish-all` | リリース。GitHub Releases → npm → crates.io の順。手動実行のみ |
+| `pages` | web 版を <https://igarinpiano.github.io/fukasis/> に載せる。`release` ブランチの `web/` が変わるたびに動く |
 
-`publish-all` と `build-check` の手動実行は、ワークフローのファイルが既定のブランチ (master) に入ってから使えます。
+`publish-all` と `build-check` の手動実行は、ワークフローのファイルが既定のブランチに入っているリポジトリで使えます (igarinpiano/fukasis の既定のブランチは `release`)。
 
 ## 最初のリリース
+
+0.1.0 で実施済みです。npm の各パッケージの Trusted Publishing も登録してあります。
+まだなら、下の 7 (crates.io の Trusted Publishing) と 8 (Environment) を済ませてください。どちらも `publish-all` から npm / crates.io へ公開するのに必要です。
+以下は記録と、やり直すときのための手順です。
 
 npm と crates.io の Trusted Publishing (GitHub Actions からトークンなしで公開する仕組み) は、**もう存在するパッケージにしか設定できません**。
 そのため最初の 1 回だけ、手元から公開します。
 
 1. **npm に組織 `fksgeo` を作ります** (npmjs.com → Add Organization)。`@fksgeo/fukasis-bin-*` の置き場所です。
-2. **`cli/Cargo.toml` と `web/package.json` の `version` をそろえて** master に入れます (`Cargo.lock` も更新します)。
+2. **`cli/Cargo.toml` と `web/package.json` の `version` をそろえて** `release` ブランチに入れます (`Cargo.lock` も更新します)。
 3. **GitHub Release を作ります。** Actions → `publish-all` → Run workflow で、「Publish to GitHub Releases」だけにチェックを入れて実行します。
    タグ `pc-v<バージョン>` と Release ができ、実行ファイルが付きます。
 4. **手元でログインします。**
@@ -84,8 +94,8 @@ crates.io も npm も、**公開したバージョンは取り消せません** 
 
 ## 2 回目以降のリリース
 
-1. `cli/Cargo.toml` と `web/package.json` の `version` を上げ、`cli/` で `cargo build` して `Cargo.lock` を更新し、master に入れます。
-2. Actions → `publish-all` → Run workflow を、全部にチェックを入れたまま実行します。
+1. `cli/Cargo.toml` と `web/package.json` の `version` を上げ、`cli/` で `cargo build` して `Cargo.lock` を更新し、`release` ブランチに入れます。
+2. Actions → `publish-all` → Run workflow を、ブランチは `release`、全部にチェックを入れたまま実行します。
 
 `version` の欄にバージョンを入れておくと、`cli/Cargo.toml` と違うときに止まります (取り違えの防止)。
 `ref` にタグを入れると、そのタグの内容をビルドします (古いリリースに実行ファイルを足すときなど)。

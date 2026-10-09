@@ -78,13 +78,14 @@ static int openWrite(const string &name)
 const int W = 3300;
 const int H = 200;
 const int FOL = 3200;
-// fol からの距離 i -> 波長 λ = 430 + (i - 1900) * 0.3 (線形分散)
-const string CALIB = "1900,2100,2300,2500\n430.000000,490.000000,550.000000,610.000000";
+// fol からの距離 i -> 波長 λ = 430.05 + (i - 1900) * 0.3 (線形分散).
+// 400 nm と 700 nm がちょうど画素の上に来ないようにしてある (来ると, 端の 1 点が入るかどうかが丸め誤差で変わる)
+const string CALIB = "1900,2100,2300,2500\n430.050000,490.050000,550.050000,610.050000";
 const string META = "test, 2026-10-01T00:00:00Z,  ISO 3200, fd 1.000000, 100 msec * 1 ";
 
 static double wavelengthAt(int i)
 {
-    return 430 + (i - 1900) * 0.3;
+    return 430.05 + (i - 1900) * 0.3;
 }
 
 // value(i) で各列の値を決めた画像 (i = FOL - x)
@@ -191,7 +192,7 @@ static void testMakecsvPeak()
     CHECK(parseSpectrum(readFile("peak.csv"), head, rows));
     CHECK(head.size() == 2 && head[0] == META);
     CHECK(head.size() == 2 && head[1] == "wavelength/nm,relative intensity(0.0 -- 1.0)");
-    CHECK(rows.size() == 999); // 1800 < i < 2800
+    CHECK(rows.size() == 1000); // 波長が 400-700 nm になるのは 1800 <= i < 2800
 
     const Row *peak = nullptr;
     bool increasing = true;
@@ -213,7 +214,7 @@ static void testMakecsvSensitivityInterpolation()
 {
     // 強度が距離に比例するランプ. 感度は 50nm 刻みの粗い表で sum(λ) = λ/100 (線形なので補間は厳密に一致するはず)
     writeImage("ramp.tif", makeImage([](int i)
-                                     { return max(0, i - 1800); }));
+                                     { return max(0, i - 1700); }));
     writeFile("calib.csv", CALIB);
     writeFile("meta.csv", META);
     writeFile("coarse.csv", makeSensit(350, 800, 50, [](double l)
@@ -227,9 +228,9 @@ static void testMakecsvSensitivityInterpolation()
     CHECK(parseSpectrum(readFile("ramp.csv"), head, rows));
     if (rows.empty())
         return;
-    // min(=i 1801 の値 1) を引いた後 3 チャネル分を感度で割る: (i - 1801) * 3 / (λ/100)
+    // min(=i 1800 の値 100) を引いた後 3 チャネル分を感度で割る: (i - 1800) * 3 / (λ/100)
     auto expected = [](int i)
-    { return 3.0 * (i - 1801) / (wavelengthAt(i) / 100.0); };
+    { return 3.0 * (i - 1800) / (wavelengthAt(i) / 100.0); };
     const Row &a = nearestRow(rows, wavelengthAt(2000));
     const Row &b = nearestRow(rows, wavelengthAt(2600));
     double ratio = a.val / b.val;
@@ -239,7 +240,7 @@ static void testMakecsvSensitivityInterpolation()
 
 static void testMakecsvParams()
 {
-    // JNI から渡した切り出し範囲が使われる (端末プロファイルの t_min / t_max)
+    // 出力する範囲は校正データから波長で決まる. 端末プロファイルの t_min / t_max を変えても出力は変わらない
     writeImage("peak.tif", makeImage([](int i)
                                      { return 10 + 1000 * exp(-pow(i - 2200, 2) / (2 * 9.0)); }));
     writeFile("calib.csv", CALIB);
@@ -253,7 +254,7 @@ static void testMakecsvParams()
     vector<string> head;
     vector<Row> rows;
     CHECK(parseSpectrum(readFile("narrow.csv"), head, rows));
-    CHECK(rows.size() == 399);
+    CHECK(rows.size() == 1000);
 }
 
 static void testMakecsvErrors()

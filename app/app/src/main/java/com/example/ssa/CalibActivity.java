@@ -6,6 +6,8 @@ import java.util.Locale;
 import android.widget.Toast;
 import android.app.Activity;
 import android.content.ContentValues;
+import android.graphics.ColorMatrix;
+import android.graphics.ColorMatrixColorFilter;
 import android.graphics.Matrix;
 import android.content.ContentUris;
 
@@ -20,6 +22,8 @@ import android.view.View;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.Button;
+import android.widget.CheckBox;
+import android.widget.CompoundButton;
 import android.widget.EditText;
 
 import com.example.ssa.databinding.ActivityCalibBinding;
@@ -28,10 +32,8 @@ import android.content.ContentResolver;
 import android.provider.MediaStore;
 import android.widget.SeekBar;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import java.io.IOException;
-import java.util.Locale;
 
 public class CalibActivity extends AppCompatActivity{
 
@@ -59,9 +61,17 @@ public class CalibActivity extends AppCompatActivity{
     int[] t = {0,0,0,0};
     float[] c = {0,0,0,0};
     SeekBar[] sb;
+    TextView brightnessTxt;
     TextView[] tv;
     EditText[] et;
     FrameLayout[] line;
+    // 追加の校正点. チェックを入れたものだけ校正に使う
+    int[] tExtra = {0,0};
+    CheckBox[] checkExtra;
+    SeekBar[] sbExtra;
+    TextView[] tvExtra;
+    EditText[] etExtra;
+    FrameLayout[] lineExtra;
 
     private void updateFol(int i){
         binding.t1.setText("" + i);
@@ -76,6 +86,33 @@ public class CalibActivity extends AppCompatActivity{
         Log.d("a", Integer.toString(fol - t[j]));
         line[j].setX((t[j] +iv1_ofs)*scale);
         line[j].setY(pos[1]-50);
+    }
+
+    private void changeExtra(int j, int i){
+        tvExtra[j].setText("" + i);
+        tExtra[j] = (imgWidth - i);
+        lineExtra[j].setX((tExtra[j] +iv1_ofs)*scale);
+        lineExtra[j].setY(pos[1]-50);
+    }
+
+    private void setExtraEnabled(int j, boolean enabled){
+        sbExtra[j].setEnabled(enabled);
+        etExtra[j].setEnabled(enabled);
+        lineExtra[j].setVisibility(enabled ? View.VISIBLE : View.INVISIBLE);
+        if(enabled){
+            changeExtra(j, sbExtra[j].getProgress());
+        }
+    }
+
+    // プレビュー画像の表示上の明るさを変える (i=10 ごとに2倍)。書き出す校正データには影響しない
+    private void changeBrightness(int i){
+        float gain = (float)Math.pow(2.0, i / 10.0);
+        ColorMatrix cm = new ColorMatrix();
+        cm.setScale(gain, gain, gain, 1.0F);
+        ColorMatrixColorFilter filter = new ColorMatrixColorFilter(cm);
+        iv1.setColorFilter(filter);
+        iv2.setColorFilter(filter);
+        brightnessTxt.setText(getString(R.string.brightness_format, gain));
     }
 
     @Override
@@ -101,10 +138,42 @@ public class CalibActivity extends AppCompatActivity{
         //SeekBar sb5 = binding.sb5;
         //TextView t5 = binding.t5;
         line = new FrameLayout[]{binding.l2,binding.l3,binding.l4,binding.l5};
+        checkExtra = new CheckBox[]{binding.extraCheck1,binding.extraCheck2};
+        sbExtra = new SeekBar[]{binding.sb6,binding.sb7};
+        tvExtra = new TextView[]{binding.t6,binding.t7};
+        etExtra = new EditText[]{binding.c5,binding.c6};
+        lineExtra = new FrameLayout[]{binding.l6,binding.l7};
+        for(int k=0; k<checkExtra.length; k++){
+            final int j = k;
+            setExtraEnabled(j, checkExtra[j].isChecked());
+            checkExtra[j].setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+                @Override
+                public void onCheckedChanged(CompoundButton btn, boolean b) {
+                    setExtraEnabled(j, b);
+                }
+            });
+            sbExtra[j].setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+                @Override
+                public void onProgressChanged(SeekBar seekBar, int i, boolean b) {
+                    if(checkExtra[j].isChecked()){
+                        changeExtra(j, i);
+                    }
+                }
+                @Override
+                public void onStartTrackingTouch(SeekBar seekBar) {
+                }
+                @Override
+                public void onStopTrackingTouch(SeekBar seekBar) {
+                }
+            });
+        }
         iv1 = binding.iv1;
         iv1.setScaleType(ImageView.ScaleType.MATRIX);
         iv2 = binding.iv2;
         iv2.setScaleType(ImageView.ScaleType.MATRIX);
+        SeekBar brightnessBar = binding.brightnessBar;
+        brightnessTxt = binding.brightnessTxt;
+        changeBrightness(brightnessBar.getProgress());
 
         
         path_et1 = binding.input1;
@@ -144,7 +213,7 @@ public class CalibActivity extends AppCompatActivity{
                     
                     if(cursor != null && cursor.moveToFirst()){
                         long id = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.MediaColumns._ID));
-                        // exsists
+                        // exists
                         uri = ContentUris.withAppendedId(collection, id);
                         Log.d("a","ありましたよっ！");
                     }else{
@@ -218,6 +287,17 @@ public class CalibActivity extends AppCompatActivity{
                     Toast.makeText(activity, "先に open image してください", Toast.LENGTH_SHORT).show();
                     return;
                 }
+                // 校正点を集める. 基本の 4 本と, チェックの入っている追加分
+                int extraCount = 0;
+                for(int j=0; j<checkExtra.length; j++){
+                    if(checkExtra[j].isChecked()){
+                        extraCount++;
+                    }
+                }
+                // folとの相対. t[] 自体は書き換えない (書き換えると2回目の export で値が壊れる)
+                double[] tRel = new double[4 + extraCount];
+                double[] cRef = new double[4 + extraCount];
+                int n = 0;
                 for(int i=0; i<4; i++){
                     try {
                         c[i] = Float.parseFloat(et[i].getText().toString().trim());
@@ -225,16 +305,26 @@ public class CalibActivity extends AppCompatActivity{
                         Toast.makeText(activity, (i + 1) + "番目の波長が数値ではありません", Toast.LENGTH_SHORT).show();
                         return;
                     }
+                    tRel[n] = fol - t[i];
+                    cRef[n] = c[i];
+                    n++;
                 }
-                // folとの相対. t[] 自体は書き換えない (書き換えると2回目の export で値が壊れる)
-                int[] rel = new int[4];
-                for(int i=0; i<4; i++){
-                    rel[i] = fol - t[i];
+                for(int j=0; j<checkExtra.length; j++){
+                    if(checkExtra[j].isChecked()){
+                        try {
+                            cRef[n] = Float.parseFloat(etExtra[j].getText().toString().trim());
+                        } catch (NumberFormatException e) {
+                            Toast.makeText(activity, (5 + j) + "番目の波長が数値ではありません", Toast.LENGTH_SHORT).show();
+                            return;
+                        }
+                        tRel[n] = fol - tExtra[j];
+                        n++;
+                    }
                 }
-                for (int i = 0; i < 4; i++) {
-                    for (int k = i + 1; k < 4; k++) {
-                        if (rel[i] == rel[k]) {
-                            Toast.makeText(activity, "同じ位置に2本以上の線があります。4本を別々の輝線に合わせてください", Toast.LENGTH_LONG).show();
+                for (int i = 0; i < n; i++) {
+                    for (int k = i + 1; k < n; k++) {
+                        if (tRel[i] == tRel[k]) {
+                            Toast.makeText(activity, "同じ位置に2本以上の線があります。それぞれ別々の輝線に合わせてください", Toast.LENGTH_LONG).show();
                             return;
                         }
                     }
@@ -248,8 +338,19 @@ public class CalibActivity extends AppCompatActivity{
                     return;
                 }
 
-                // 小数点がカンマになるロケールでも読めるよう Locale.US で書く
-                String dat = String.format(Locale.US, "%d,%d,%d,%d\n%f,%f,%f,%f",rel[0],rel[1],rel[2],rel[3],c[0],c[1],c[2],c[3]);
+                // 1 行目が位置, 2 行目が波長. 列の数が校正点の数
+                // 小数点がカンマになる言語設定でも csv が壊れないように Locale を固定
+                StringBuilder line1 = new StringBuilder();
+                StringBuilder line2 = new StringBuilder();
+                for(int i=0; i<n; i++){
+                    if(i > 0){
+                        line1.append(",");
+                        line2.append(",");
+                    }
+                    line1.append(String.format(Locale.US, "%d", (int)tRel[i]));
+                    line2.append(String.format(Locale.US, "%f", cRef[i]));
+                }
+                String dat = line1 + "\n" + line2;
                 boolean saved = false;
                 try(OutputStream output = resolver.openOutputStream(uriCsv, "wt")){
                     output.write(dat.getBytes("UTF-8"));
@@ -259,7 +360,57 @@ public class CalibActivity extends AppCompatActivity{
                     e.printStackTrace();
                 }
                 Cam.finishOutput(resolver, uriCsv, valuesCsv, saved);
-                Toast.makeText(activity, saved ? "校正データを保存しました" : "校正データの保存に失敗しました", Toast.LENGTH_SHORT).show();
+                if (!saved) {
+                    Toast.makeText(activity, "校正データの保存に失敗しました", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+
+                // この校正データで csv 画面が出力する波長の範囲を確かめて知らせる
+                CalibrationValidator.Result check = CalibrationValidator.validate(tRel, cRef, fol);
+                int wlMin = (int)Math.round(check.wavelengthMin);
+                int wlMax = (int)Math.round(check.wavelengthMax);
+                String message;
+                switch(check.status){
+                    case CalibrationValidator.TRUNCATED:
+                        message = getString(R.string.calib_warning_truncated, wlMin, wlMax);
+                        break;
+                    case CalibrationValidator.NO_OUTPUT:
+                        message = getString(R.string.calib_warning_no_output);
+                        break;
+                    default:
+                        message = getString(R.string.calib_saved, wlMin, wlMax);
+                        break;
+                }
+                Toast.makeText(activity, message, Toast.LENGTH_LONG).show();
+            }
+        });
+        brightnessBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int i, boolean b) {
+                changeBrightness(i);
+            }
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+            }
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+            }
+        });
+        // スクロールしても線が画像についてくるようにする
+        binding.scroll.setOnScrollChangeListener(new View.OnScrollChangeListener() {
+            @Override
+            public void onScrollChange(View v, int x, int y, int oldX, int oldY) {
+                if(imgWidth == 0){
+                    return;
+                }
+                iv2.getLocationOnScreen(pos);
+                binding.l1.setY(pos[1]-50);
+                for(int j=0; j<4; j++){
+                    line[j].setY(pos[1]-50);
+                }
+                for(int j=0; j<lineExtra.length; j++){
+                    lineExtra[j].setY(pos[1]-50);
+                }
             }
         });
         sb1.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {

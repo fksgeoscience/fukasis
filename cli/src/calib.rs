@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 //! 波長校正: 0次光からの距離 t (px) から波長 (nm) への対応と, スペクトルとして出力する t の範囲.
-//! アプリの cpp/wavelength_calib.h と同じ計算.
+//! アプリの core/Sources/FukasisCoreC/wavelength_calib.h と同じ計算.
 
 pub const MAX_DEGREE: usize = 3;
 /// スペクトルとして出力する波長の範囲 (nm)

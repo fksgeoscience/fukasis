@@ -29,8 +29,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
-import java.util.Collections;
-import com.github.mikephil.charting.utils.EntryXComparator;
 import java.util.List;
 import java.nio.charset.StandardCharsets;
 import android.app.Activity;
@@ -39,11 +37,19 @@ import android.content.ContentUris;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
+import android.widget.CompoundButton;
+import android.widget.Switch;
+import android.widget.TextView;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 public class ViewActivity extends AppCompatActivity {
 
     private ActivityViewBinding binding;
     private LineChart lineChart;
+    private Switch outlierSwitch;
+    private TextView info;
+    // 開いた csv の中身 (ファイルに書かれていた順)。null ならまだ開いていない
+    private float[] wavelengths;
+    private float[] intensities;
 
     private final ActivityResultLauncher<Intent> csvPickerLauncher = registerForActivityResult(
             new ActivityResultContracts.StartActivityForResult(),
@@ -66,6 +72,16 @@ public class ViewActivity extends AppCompatActivity {
         setContentView(binding.getRoot());
 
         lineChart = binding.lineChart;
+        info = binding.info;
+        outlierSwitch = binding.outlierSwitch;
+        outlierSwitch.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton btn, boolean b) {
+                if (wavelengths != null) {
+                    displayChart();
+                }
+            }
+        });
 
         // 先ほど作ったクラスをインスタンス化
         CustomMarkerView marker = new CustomMarkerView(this, R.layout.custom_marker_view);
@@ -102,8 +118,9 @@ public class ViewActivity extends AppCompatActivity {
 
     // URIからCSVを読み込み、グラフ用のデータリストを作成する
     private void readCsvAndDrawChart(Uri uri) {
-        // グラフのデータポイントを入れるリスト
-        List<Entry> entries = new ArrayList<>();
+        // 読み込んだ値を入れるリスト
+        List<Float> xs = new ArrayList<>();
+        List<Float> ys = new ArrayList<>();
 
         try (InputStream inputStream = getContentResolver().openInputStream(uri);
              BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8))) {
@@ -116,9 +133,11 @@ public class ViewActivity extends AppCompatActivity {
                 if (columns.length >= 2) {
                     try {
                         // X軸（波長）とY軸（強度）を数値(Float)に変換
-                        float x = Float.parseFloat(columns[0].trim());
-                        float y = Float.parseFloat(columns[1].trim());
-                        entries.add(new Entry(x, y));
+                        // (nan や inf も一旦読み込み, 何点除外したかを表示できるようにする)
+                        float x = SpectrumFilter.parseValue(columns[0]);
+                        float y = SpectrumFilter.parseValue(columns[1]);
+                        xs.add(x);
+                        ys.add(y);
                     } catch (NumberFormatException e) {
                         // 1行目が「Wavelength,Intensity」などの文字列ヘッダーだった場合は
                         // エラーになるため、ここでキャッチしてスキップします
@@ -127,11 +146,15 @@ public class ViewActivity extends AppCompatActivity {
                 }
             }
 
-            // MPAndroidChart は x 昇順でないと描画・タップ位置がおかしくなるので並べ替える
-            Collections.sort(entries, new EntryXComparator());
+            wavelengths = new float[xs.size()];
+            intensities = new float[ys.size()];
+            for (int i = 0; i < wavelengths.length; i++) {
+                wavelengths[i] = xs.get(i);
+                intensities[i] = ys.get(i);
+            }
 
             // 読み込みが完了したら、グラフを描画するメソッドを呼ぶ
-            displayChart(entries);
+            displayChart();
 
         } catch (IOException e) {
             Log.e("CSV_READ", "読み込みエラー: ", e);
@@ -139,9 +162,24 @@ public class ViewActivity extends AppCompatActivity {
     }
 
     // 抽出したデータを使ってグラフを画面に表示する
-    private void displayChart(List<Entry> entries) {
-        // データセットを作成（"Spectrum"は凡例の表示名）
-        LineDataSet dataSet = new LineDataSet(entries, "Spectrum");
+    private void displayChart() {
+        // 波長順に並べ, スイッチがオンなら明らかな異常値を除く
+        // (波長が前後していたり NaN が混じっていたりすると, グラフが描画されない)
+        SpectrumFilter.Result spectrum = SpectrumFilter.filter(wavelengths, intensities, outlierSwitch.isChecked());
+        info.setText(getString(R.string.spectrum_points_info, spectrum.wavelength.length, spectrum.excluded));
+
+        List<Entry> entries = new ArrayList<>();
+        for (int i = 0; i < spectrum.wavelength.length; i++) {
+            entries.add(new Entry(spectrum.wavelength[i], spectrum.intensity[i]));
+        }
+        if (entries.isEmpty()) {
+            lineChart.setNoDataText(getString(R.string.no_valid_data));
+            lineChart.clear();
+            return;
+        }
+
+        // データセットを作成（第2引数は凡例の表示名）
+        LineDataSet dataSet = new LineDataSet(entries, getString(R.string.legend_spectrum));
 
         // 💡 スペクトル描画のための重要なカスタマイズ
         dataSet.setColor(Color.BLUE); // 線の色
@@ -161,7 +199,8 @@ public class ViewActivity extends AppCompatActivity {
 
         lineChart.getLegend().setTextColor(Color.WHITE);
 
-        // グラフを更新
+        // グラフを更新 (データが変わるので拡大は解除する)
+        lineChart.fitScreen();
         lineChart.invalidate();
     }
 }

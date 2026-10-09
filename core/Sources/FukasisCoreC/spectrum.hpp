@@ -43,7 +43,8 @@ namespace fk
     // 機種ごとに変わりうるスペクトル切り出しのパラメータ (既定値は Galaxy S22 で使ってきた値)
     struct SpectrumParams
     {
-        // スペクトルを切り出す範囲 (0次光からの距離, pixel). この範囲の外は出力しない
+        // 一次光が写るおおよその範囲 (0次光からの距離, pixel). 機種の目安として持っているだけで,
+        // makeSpectrum は使わない (出力する範囲は校正データから波長で決める. wavelength_calib.h)
         int tMin = 1800;
         int tMax = 2800;
         // 縦に積算する帯の幅 (pixel) と中心 (画像の高さに対する割合)
@@ -71,7 +72,7 @@ namespace fk
     bool cfaFromMetadata(const std::string &header, Cfa &out);
 
     // スペクトルを計算して CSV にする. 成功時は空文字列, 失敗時はエラーメッセージを返す.
-    //   fol: 0次光の列, calibText: 校正データ (1行目 距離 x4, 2行目 波長 x4),
+    //   fol: 0次光の列, calibText: 校正データ (1行目 距離, 2行目 波長. 列の数が校正点の数で, 4 個以上を想定),
     //   metadataText: 1行目を CSV のヘッダにする, sensitivityText: 先頭2行ヘッダ, 各行 波長,b,g,r
     std::string makeSpectrum(const ImageView &img, int fol, const std::string &calibText,
                              const std::string &metadataText, const std::string &sensitivityText,

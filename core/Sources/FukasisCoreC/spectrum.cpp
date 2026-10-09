@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright © 2026 Tsuyoshi Kobayashi(legrs4073)
 #include "spectrum.hpp"
+#include "wavelength_calib.h"
 
 #include <algorithm>
 #include <array>
@@ -230,8 +231,8 @@ namespace fk
             return "画像を読み込めません";
         if (fol <= 0 || fol >= w)
             return "0次光の位置(fol)が画像の範囲外です: " + std::to_string(fol);
-        if (params.tMin < 0 || params.tMax <= params.tMin)
-            return "スペクトルを切り出す範囲が不正です: " + std::to_string(params.tMin) + "-" + std::to_string(params.tMax);
+        if (!(params.wlMin < params.wlMax))
+            return "出力する波長の範囲が不正です";
 
         std::vector<double> nums;
 
@@ -241,7 +242,7 @@ namespace fk
         {
             if (isBlank(line))
                 continue;
-            if (!parseNumbers(line, nums) || nums.size() < 4)
+            if (!parseNumbers(line, nums) || nums.size() < 2)
                 return "校正データの形式が不正です: " + line;
             calibRows.push_back(nums);
             if (calibRows.size() == 2)
@@ -249,24 +250,19 @@ namespace fk
         }
         if (calibRows.size() < 2)
             return "校正データがない";
-
-        double t_ref[4];
-        double c_ref[4];
-        double i_deno[4];
-        for (int i = 0; i < 4; i++)
-        {
-            t_ref[i] = calibRows[0][i];
-            c_ref[i] = calibRows[1][i];
-        }
-        for (int j = 0; j < 4; j++)
-        {
-            i_deno[j] = 1.0;
-            for (int k = 0; k < 4; k++)
-                if (k != j)
-                    i_deno[j] *= (t_ref[j] - t_ref[k]);
-            if (i_deno[j] == 0)
-                return "校正データの画素位置が重複しています";
-        }
+        // 1行目が距離, 2行目が波長. 列の数が校正点の数 (4 個以上を想定)
+        const std::vector<double> &t_ref = calibRows[0];
+        const std::vector<double> &c_ref = calibRows[1];
+        if (t_ref.size() != c_ref.size())
+            return "校正データの距離と波長の数が合いません";
+        for (size_t j = 0; j < t_ref.size(); j++)
+            for (size_t k = j + 1; k < t_ref.size(); k++)
+                if (t_ref[j] == t_ref[k])
+                    return "校正データの画素位置が重複しています";
+        // t -> 波長 の対応. 4 点ならその 4 点を通る 3 次式, 5 点以上なら 3 次の最小二乗
+        const wlcalib::Poly wl_fit = wlcalib::fit(t_ref, c_ref);
+        if (!wl_fit.ok)
+            return "校正データから波長を求められません";
 
         // observation infomation --------------------------------------------------------------
         std::vector<std::string> metaLines = splitLines(metadataText);
@@ -309,6 +305,9 @@ namespace fk
         }
         const int size = (int)pure[0].size();
 
+        // 出力する範囲. 画素の固定範囲ではなく波長で決める. 波長が逆行する部分は含めない
+        const wlcalib::Range out_range = wlcalib::outputRange(wl_fit, t_ref, size, params.wlMin, params.wlMax);
+
         // bとrの欠落を埋めて、minをget =======================
         double minv[3];
         std::fill(minv, minv + 3, std::numeric_limits<double>::max());
@@ -320,7 +319,7 @@ namespace fk
                 if (pure[c][i] == 0)
                     pure[c][i] = (pure[c][i - 1] + pure[c][i + 1]) / 2;
             }
-            if (params.tMin < i && i < params.tMax)
+            if (out_range.lo <= i && i <= out_range.hi)
             {
                 for (int c = 0; c < 3; c++)
                     minv[c] = std::min(minv[c], pure[c][i]);
@@ -331,19 +330,10 @@ namespace fk
         std::vector<double> wavelengths;
         std::vector<double> intensities;
         double maxv = 0;
-        for (int i = params.tMin + 1; i < params.tMax && i < size; i++)
+        for (int i = out_range.lo; i <= out_range.hi; i++)
         {
-            // langange interpolation | t -> t_p (cubic)
-            const double t = i;
-            double t_p = 0;
-            for (int j = 0; j < 4; j++)
-            {
-                double i_nume = 1.0;
-                for (int k = 0; k < 4; k++)
-                    if (k != j)
-                        i_nume *= (t - t_ref[k]);
-                t_p += c_ref[j] * i_nume / i_deno[j];
-            }
+            // t -> t_p (波長)
+            const double t_p = wl_fit.at(i);
             if (!(params.wlMin < t_p && t_p < params.wlMax))
                 continue;
 

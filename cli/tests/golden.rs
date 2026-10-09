@@ -70,10 +70,20 @@ fn darked() -> Image {
 }
 
 fn assert_matches_golden(calibration: &str, expected: &str) {
+    assert_matches_golden_with(calibration, "metadata.csv", expected);
+}
+
+fn assert_matches_golden_with(calibration: &str, metadata: &str, expected: &str) {
     let cal = calib::parse_calibration(&testdata(calibration)).unwrap();
     let sensitivity = spectrum::parse_sensitivity(&testdata("sensitivity.csv")).unwrap();
-    let result = spectrum::extract(&darked(), &cal, &sensitivity, FOL).unwrap();
-    let actual = spectrum::to_csv(&result, &testdata("metadata.csv"));
+    let header = testdata(metadata);
+    // アプリと同じく, metadata に記録されたカラーフィルタ配列があればそれを使う
+    let mut options = spectrum::Options::default();
+    if let Some(cfa) = spectrum::cfa_from_metadata(&header) {
+        options.cfa = cfa;
+    }
+    let result = spectrum::extract_with(&darked(), &cal, &sensitivity, FOL, &options).unwrap();
+    let actual = spectrum::to_csv(&result, &header);
 
     let expected = testdata(expected);
     let (actual_lines, expected_lines): (Vec<&str>, Vec<&str>) =
@@ -119,6 +129,16 @@ fn truncated_calibration() {
     let range = calib::output_range(&calib::fit(&cal.t, &cal.c), &cal.t, FOL).unwrap();
     assert!(range.cut_low && range.cut_high);
     assert_matches_golden("calib_truncated.csv", "expected_spectrum_truncated.csv");
+}
+
+#[test]
+fn color_filter_arrangement_from_metadata() {
+    // metadata に ", cfa RGGB" とあれば, その並びとして読む (合成画像の並びは GBRG のまま)
+    assert_matches_golden_with(
+        "calib_4pt.csv",
+        "metadata_rggb.csv",
+        "expected_spectrum_rggb.csv",
+    );
 }
 
 #[test]

@@ -3,7 +3,8 @@ import Foundation
 import Testing
 @testable import FukasisCore
 
-private let calib = "1900,2100,2300,2500\n430.000000,490.000000,550.000000,610.000000"
+// 400 nm と 700 nm がちょうど画素の上に来ないようにしてある (来ると, 端の 1 点が入るかどうかが丸め誤差で変わる)
+private let calib = "1900,2100,2300,2500\n430.050000,490.050000,550.050000,610.050000"
 private let meta = "test, 2026-10-01T00:00:00Z,  ISO 3200, fd 1.000000, 100 msec * 1 "
 
 private func sensitivity() -> String {
@@ -39,7 +40,7 @@ private func peakImage(cfaShift: Bool = false) -> FloatImage {
                                             sensitivity: sensitivity())
     let lines = csv.split(separator: "\n").map(String.init)
     #expect(lines[0] == meta)
-    #expect(lines.count == 2 + 999)
+    #expect(lines.count == 2 + 1000)
     let rows = lines.dropFirst(2).map { $0.split(separator: ",").map { Double($0)! } }
     let peak = try #require(rows.max { $0[1] < $1[1] })
     #expect(abs(peak[0] - 520) < 0.5)
