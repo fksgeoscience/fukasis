@@ -46,13 +46,19 @@ jobs:
       - name: Install the assembled packages and run
         run: |
           mkdir tarballs try
-          for d in npm-out/@fksgeo/fukasis-bin-linux-x64 npm-out/@fksgeo/fukasis-bin-linux-x64-musl npm-out/fukasis; do
+          for d in npm-out/@fksgeo/fukasis-bin-linux-x64 npm-out/fukasis; do
             (cd "$d" && npm pack --silent --pack-destination "$GITHUB_WORKSPACE/tarballs")
           done
           cd try
           npm init -y > /dev/null
           # 機種別パッケージは 0.0.0 としては registry に無いので, 手元の tarball から入れる
-          npm install --no-audit --no-fund ../tarballs/fksgeo-fukasis-bin-linux-x64-0.0.0.tgz ../tarballs/fksgeo-fukasis-bin-linux-x64-musl-0.0.0.tgz
+          npm install --no-audit --no-fund ../tarballs/fksgeo-fukasis-bin-linux-x64-0.0.0.tgz
           npm install --no-audit --no-fund --omit=optional ../tarballs/fukasis-0.0.0.tgz
           npx --no-install fukasis --version
           npx --no-install fukasis info ../testdata/strips_le.tif
+      # musl 版は静的リンクなので, glibc のランナーでもそのまま動く
+      - name: Run the static musl build
+        run: |
+          bin=npm-out/@fksgeo/fukasis-bin-linux-x64-musl/bin/fukasis
+          "$bin" --version
+          "$bin" info testdata/strips_le.tif
