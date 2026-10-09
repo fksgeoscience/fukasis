@@ -35,6 +35,7 @@
     let peaks = []; // [x, ...]
     let scaleTicks = []; // [{x, label}]
     let refLines = []; // [{x, label}] 校正式から求めた, 既知の輝線が来るはずの位置
+    let overlay = null; // 列ごとの参照データの値 (校正式で画像の位置に直したもの). 無い列は NaN
     let profileLimit = null; // この x より左だけを見て, プロファイルの縦の範囲を決める (0次光で潰れないように)
 
     const cssVar = (name) => getComputedStyle(container).getPropertyValue(name).trim();
@@ -150,6 +151,35 @@
           rowEnd[row] = px + 3 + ctx.measureText(line.label).width;
           ctx.fillStyle = cssVar('--text-secondary');
           ctx.fillText(line.label, px + 3, 2 + row * REF_ROW);
+        }
+      }
+
+      // 参照データ (校正式で画像の位置に直したもの). 縦は参照データ自身の最小〜最大に合わせる
+      if (overlay) {
+        let oMin = Infinity;
+        let oMax = -Infinity;
+        for (let x = 0; x < img.width; x++) {
+          if (!Number.isFinite(overlay[x])) continue;
+          oMin = Math.min(oMin, overlay[x]);
+          oMax = Math.max(oMax, overlay[x]);
+        }
+        if (oMax > oMin) {
+          ctx.strokeStyle = cssVar('--accent');
+          ctx.lineWidth = 1.25;
+          ctx.lineJoin = 'round';
+          ctx.beginPath();
+          let pen = false;
+          for (let x = 0; x < img.width; x++) {
+            if (!Number.isFinite(overlay[x])) {
+              pen = false;
+              continue;
+            }
+            const py = bottom - ((overlay[x] - oMin) / (oMax - oMin)) * (bottom - top);
+            if (pen) ctx.lineTo(sx(x), py);
+            else ctx.moveTo(sx(x), py);
+            pen = true;
+          }
+          ctx.stroke();
         }
       }
 
@@ -288,6 +318,11 @@
       },
       setScaleTicks(next) {
         scaleTicks = next;
+        renderProfile();
+      },
+      // 参照データを重ねる. next は列ごとの値 (無い列は NaN) か null
+      setOverlay(next) {
+        overlay = next;
         renderProfile();
       },
       // 参照線 [{x, label}]. 名前を書く分, プロファイルを少し高くする

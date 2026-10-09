@@ -237,6 +237,56 @@ test('感度データ: 波長順に並べ, 間は線形補間, 範囲の外は�
   assert.throws(() => core.parseSensitivity('a\nb\n400,1,1,1\n410,x,1,1\n'));
 });
 
+test('スペクトル出力: 感度校正をしない', () => {
+  const cal = core.parseCalibration(testdata('calib_4pt.csv'));
+  // 感度がどの波長でも同じなら, 校正してもしなくても (最大値で割ったあとは) 同じになる
+  const flat = core.parseSensitivity('a\nb\n300,1,2,3\n800,1,2,3\n');
+  const corrected = core.extract(darked(), cal, flat, FOL);
+  const raw = core.extract(darked(), cal, null, FOL, { noSensitivity: true });
+  assert.deepEqual(raw.wavelength, corrected.wavelength);
+  assert.equal(raw.intensity.length, corrected.intensity.length);
+  for (let i = 0; i < raw.intensity.length; i++) {
+    assert.ok(Math.abs(raw.intensity[i] - corrected.intensity[i]) < 1e-12);
+  }
+  // 感度データを渡しても, 使わない
+  const ignored = core.extract(darked(), cal, core.parseSensitivity(testdata('sensitivity.csv')), FOL, { noSensitivity: true });
+  assert.deepEqual(ignored.intensity, raw.intensity);
+  // 感度校正をする (既定) のに感度データが無ければエラー
+  assert.throws(() => core.extract(darked(), cal, null, FOL), /感度データ/);
+  // 感度校正をした結果とは違う
+  const real = core.extract(darked(), cal, core.parseSensitivity(testdata('sensitivity.csv')), FOL);
+  assert.ok(real.intensity.some((v, i) => Math.abs(v - raw.intensity[i]) > 1e-3));
+});
+
+test('参照データ: 区切りや単位の違うファイルを読む', () => {
+  // アプリのスペクトルの csv (ヘッダー 2 行) はそのまま読める
+  const own = core.parseReference('seq, 2026-10-08\nwavelength/nm,relative intensity(0.0 -- 1.0)\n400.5,0.1\n401,0.2\n');
+  assert.deepEqual([own.x, own.y, own.unit], [[400.5, 401], [0.1, 0.2], 'nm']);
+  // タブ / 空白 / セミコロン区切り, コメント行, 順番がばらばら, 同じ波長の重複
+  const mixed = core.parseReference('# solar\n500\t3\n 450  2\n550;4\n450,9\nabc,1\n');
+  assert.deepEqual([mixed.x, mixed.y], [[450, 500, 550], [2, 3, 4]]);
+  // Å と µm は nm に直す
+  const angstrom = core.parseReference('4000,1\n7000,2\n');
+  assert.deepEqual([angstrom.x, angstrom.unit], [[400, 700], 'Å']);
+  const micron = core.parseReference('0.4,1\n0.7,2\n');
+  assert.equal(micron.unit, 'µm');
+  assert.ok(Math.abs(micron.x[0] - 400) < 1e-9 && Math.abs(micron.x[1] - 700) < 1e-9);
+  assert.throws(() => core.parseReference('wavelength,intensity\n500,1\n'));
+  assert.throws(() => core.parseReference(''));
+});
+
+test('線形補間: 範囲の外は NaN', () => {
+  const xs = [400, 500, 700];
+  const ys = [1, 3, 7];
+  assert.equal(core.interpolate(xs, ys, 400), 1);
+  assert.equal(core.interpolate(xs, ys, 450), 2);
+  assert.equal(core.interpolate(xs, ys, 600), 5);
+  assert.equal(core.interpolate(xs, ys, 700), 7);
+  assert.ok(Number.isNaN(core.interpolate(xs, ys, 399.9)));
+  assert.ok(Number.isNaN(core.interpolate(xs, ys, 700.1)));
+  assert.ok(Number.isNaN(core.interpolate([], [], 500)));
+});
+
 test('感度データ: ヘッダー 2 行を読み飛ばす', () => {
   const s = core.parseSensitivity('title\nwavelength,b,g,r\n400,1,2,3\n\n410,2,3,4.5\n');
   assert.deepEqual(s.wavelength, [400, 410]);

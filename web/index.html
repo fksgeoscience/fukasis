@@ -90,6 +90,7 @@
                 <option value="none" data-i18n="calib.refsNone"></option>
                 <option value="lamp" data-i18n="calib.refsLamp"></option>
                 <option value="sky" data-i18n="calib.refsSky"></option>
+                <option value="sun" data-i18n="calib.refsSun"></option>
                 <option value="all" data-i18n="calib.refsAll"></option>
               </select></label
             >
@@ -97,6 +98,25 @@
           </div>
           <div id="calib-viewer"></div>
           <p class="note" id="calib-readout" style="margin: 4px 0 0; min-height: 1.5em"></p>
+
+          <div class="row" style="margin-top: 8px">
+            <label class="field">
+              <span data-i18n="calib.refData"></span>
+              <input type="file" id="calib-ref-file" accept=".csv,.txt,.dat,text/csv,text/plain" />
+            </label>
+            <span class="loaded" id="calib-ref-info"></span>
+            <button class="small" id="calib-ref-clear" data-i18n="calib.refClear" hidden></button>
+            <label class="note" id="calib-ref-overlay-label" hidden
+              ><input type="checkbox" id="calib-ref-overlay" checked /> <span data-i18n="calib.refOverlay"></span
+            ></label>
+          </div>
+          <div id="calib-ref-work" hidden>
+            <p class="note" style="margin: 0 0 4px">
+              <span class="legend-line" style="--key-color: var(--accent)"></span><span data-i18n="calib.refLegend"></span>
+            </p>
+            <div id="calib-ref-plot"></div>
+            <p class="note" id="calib-ref-readout" style="margin: 4px 0 0; min-height: 1.5em"></p>
+          </div>
 
           <div class="grid2" style="margin-top: 12px">
             <div>
@@ -162,6 +182,9 @@
               <span data-i18n="csv.sensitivity"></span>
               <input type="file" id="csv-sens-file" accept=".csv,text/csv" />
               <span class="loaded" id="csv-sens-info"></span>
+              <label style="color: var(--text-primary); font-size: 14px"
+                ><input type="checkbox" id="csv-no-sens" /> <span data-i18n="csv.noSens"></span
+              ></label>
             </label>
             <label class="field">
               <span data-i18n="csv.metadata"></span>
@@ -244,6 +267,7 @@
     <script src="js/i18n.js"></script>
     <script src="js/chart.js"></script>
     <script src="js/viewer.js"></script>
+    <script src="js/refplot.js"></script>
     <script src="js/app.js"></script>
   </body>
 </html>
