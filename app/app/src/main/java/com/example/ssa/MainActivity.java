@@ -71,6 +71,14 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
+        Button device = binding.deviceBtn;
+        device.setOnClickListener(new View.OnClickListener(){
+            public void onClick(View v){
+                Intent intent = new Intent(MainActivity.this, DeviceActivity.class);
+                startActivity(intent);
+            }
+        });
+
         checkAllFilesAccessPermission();
 
     }

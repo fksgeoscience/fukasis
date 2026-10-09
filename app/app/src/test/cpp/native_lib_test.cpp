@@ -2,7 +2,8 @@
 // native-lib.cpp を host (Linux + OpenCV) でビルドし, makecsv / processImgs / saveImg を
 // 合成データで検証する. CI の native-test ジョブから実行される.
 //
-//   g++ -std=c++17 -I stubs $(pkg-config --cflags opencv4) native_lib_test.cpp $(pkg-config --libs opencv4)
+//   g++ -std=c++17 -I stubs -I ../../../../../core/Sources/FukasisCoreC $(pkg-config --cflags opencv4) \
+//       native_lib_test.cpp ../../../../../core/Sources/FukasisCoreC/spectrum.cpp $(pkg-config --libs opencv4)
 #include "../../main/cpp/native-lib.cpp"
 
 #include <cstdio>
@@ -126,7 +127,7 @@ static bool parseSpectrum(const string &text, vector<string> &head, vector<Row> 
     vector<double> v;
     while (getline(ss, line))
     {
-        if (!parseNumbers(line, v) || v.size() != 2)
+        if (!fk::parseNumbers(line, v) || v.size() != 2)
             return false;
         rows.push_back({v[0], v[1]});
     }
@@ -134,11 +135,12 @@ static bool parseSpectrum(const string &text, vector<string> &head, vector<Row> 
 }
 
 static string callMakecsv(const string &img, const string &calib, const string &meta, const string &sensit,
-                          const string &out, int fol)
+                          const string &out, int fol, fk::SpectrumParams p = fk::SpectrumParams())
 {
     int fd1 = openRead(img), fd2 = openRead(calib), fd3 = openRead(meta), fd4 = openRead(sensit), fd5 = openWrite(out);
     JNIEnv env;
-    jstring r = Java_com_example_ssa_CsvActivity_makecsv(&env, nullptr, fd1, fd2, fd3, fd4, fd5, fol);
+    jstring r = Java_com_example_ssa_CsvActivity_makecsv(&env, nullptr, fd1, fd2, fd3, fd4, fd5, fol,
+                                                         p.tMin, p.tMax, p.bandWidth, p.bandCenter, (int)p.cfa);
     for (int fd : {fd1, fd2, fd3, fd4, fd5})
         close(fd);
     return r->str;
@@ -158,10 +160,10 @@ static const Row &nearestRow(const vector<Row> &rows, double wl)
 static void testParseNumbers()
 {
     vector<double> v;
-    CHECK(parseNumbers("1, 2.5,3e2", v) && v.size() == 3 && v[2] == 300);
-    CHECK(!parseNumbers("1,abc", v));
-    CHECK(!parseNumbers("", v));
-    CHECK(!parseNumbers("1,,2", v));
+    CHECK(fk::parseNumbers("1, 2.5,3e2", v) && v.size() == 3 && v[2] == 300);
+    CHECK(!fk::parseNumbers("1,abc", v));
+    CHECK(!fk::parseNumbers("", v));
+    CHECK(!fk::parseNumbers("1,,2", v));
 }
 
 static void testMakecsvPeak()
@@ -233,6 +235,25 @@ static void testMakecsvSensitivityInterpolation()
     double ratio = a.val / b.val;
     double expectedRatio = expected(2000) / expected(2600);
     CHECK(fabs(ratio / expectedRatio - 1.0) < 1e-3);
+}
+
+static void testMakecsvParams()
+{
+    // JNI から渡した切り出し範囲が使われる (端末プロファイルの t_min / t_max)
+    writeImage("peak.tif", makeImage([](int i)
+                                     { return 10 + 1000 * exp(-pow(i - 2200, 2) / (2 * 9.0)); }));
+    writeFile("calib.csv", CALIB);
+    writeFile("meta.csv", META);
+    writeFile("sensit.csv", makeSensit(350, 800, 10, [](double)
+                                       { return 1.0; }));
+    fk::SpectrumParams p;
+    p.tMin = 2000;
+    p.tMax = 2400;
+    CHECK(callMakecsv("peak.tif", "calib.csv", "meta.csv", "sensit.csv", "narrow.csv", FOL, p).empty());
+    vector<string> head;
+    vector<Row> rows;
+    CHECK(parseSpectrum(readFile("narrow.csv"), head, rows));
+    CHECK(rows.size() == 399);
 }
 
 static void testMakecsvErrors()
@@ -307,7 +328,7 @@ static void testStackAndSave()
 
     // 積算前に保存しようとしたらエラー
     int fdT = openWrite("s.tif"), fdJ = openWrite("s.jpg");
-    CHECK(!Java_com_example_ssa_Cam_saveImg(&env, nullptr, fdT, fdJ)->str.empty());
+    CHECK(!Java_com_example_ssa_Cam_saveImg(&env, nullptr, fdT, fdJ, (int)fk::Cfa::GBRG)->str.empty());
     close(fdT);
     close(fdJ);
 
@@ -326,7 +347,7 @@ static void testStackAndSave()
 
     fdT = openWrite("s.tif");
     fdJ = openWrite("s.jpg");
-    CHECK(Java_com_example_ssa_Cam_saveImg(&env, nullptr, fdT, fdJ)->str.empty());
+    CHECK(Java_com_example_ssa_Cam_saveImg(&env, nullptr, fdT, fdJ, (int)fk::Cfa::RGGB)->str.empty());
     close(fdT);
     close(fdJ);
     Mat tif = readImage("s.tif");
@@ -344,6 +365,7 @@ int main()
     testParseNumbers();
     testMakecsvPeak();
     testMakecsvSensitivityInterpolation();
+    testMakecsvParams();
     testMakecsvErrors();
     testProcessImgs();
     testStackAndSave();

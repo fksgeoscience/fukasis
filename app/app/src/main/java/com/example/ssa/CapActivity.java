@@ -355,6 +355,8 @@ if (isLine) {
                         break;
                 }
 
+                // カメラが受け付けない ISO は受け付ける範囲に収める (表示も実際の値にする)
+                iso = cam.clampIso(iso);
                 isoTxt.setText("ISO:" + iso + "");
                 cam.changeValueOfPreview(iso, -100, 0, -1);
             }
@@ -383,7 +385,11 @@ if (isLine) {
                 expoTxt.setText(String.format("Exposure: %.2f ms", ms));
 
                 // 2. ナノ秒（Camera2 API用）は大きな整数になるので (long) にキャストする
-                expo = (long) (ms * 1000000.0);
+                // カメラが受け付けない露出時間は受け付ける範囲に収める (表示も実際の値にする)
+                expo = cam.clampExposure((long) (ms * 1000000.0));
+                if (expo != (long) (ms * 1000000.0)) {
+                    expoTxt.setText(String.format("Exposure: %.2f ms (camera limit)", expo / 1000000.0));
+                }
 
                 cam.changeValueOfPreview(0, -100, expo, -1);
             }
@@ -400,10 +406,12 @@ if (isLine) {
             @Override
             public void onProgressChanged(SeekBar seekBar, int i, boolean b) {
                 // 0 ~ 1000
+                // ガイド線の位置は筐体と画面によるので端末プロファイルから
+                DeviceProfile profile = DeviceProfiles.current(CapActivity.this);
                 if (zoom == 2) {
-                    line.setY(1800 + i / 10);
+                    line.setY((float) profile.guideLineYPointing() + i / 10);
                 } else {
-                    line.setY(2050 + i / 10);
+                    line.setY((float) profile.guideLineY() + i / 10);
                 }
             }
 
@@ -423,7 +431,8 @@ if (isLine) {
         alarmSound = soundPool.load(this, R.raw.technoalarm, 1);
         shatterSound = soundPool.load(this, R.raw.shatter, 1);
 
-        // cam object
+        // cam object (使うカメラは端末プロファイルで決める. 書かれていなければ RAW で撮れる背面カメラ)
+        camId = DeviceProfiles.cameraId(this);
         cam = new Cam(this, camId, soundPool, alarmSound, shatterSound, tv1, tv2, captureStatusIcon);
 
         // request camera permission (カメラを開くのは onResume で行う)

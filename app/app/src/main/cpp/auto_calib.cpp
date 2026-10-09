@@ -2,11 +2,12 @@
 // Copyright © 2026 Tsuyoshi Kobayashi(legrs4073)
 //
 // 自動校正 (SpectrumCalibrator) 用のネイティブ処理.
-// 画像のデコードと 1次元プロファイルの抽出だけを行い, 0次光推定・ピーク検出・
+// 画像のデコードだけを行い (1次元プロファイルの抽出は共通コア), 0次光推定・ピーク検出・
 // 波長カタログとの対応付けは host で単体テストできる Java 側 (SpectrumCalibrator) で行う.
 #include <jni.h>
 #include <android/log.h>
 #include <opencv2/opencv.hpp>
+#include "spectrum.hpp"
 #include <algorithm>
 #include <cerrno>
 #include <cmath>
@@ -19,9 +20,6 @@
 
 namespace
 {
-    // makecsv と同じ: 画像中央から縦に積算する帯の幅と sigma clipping の閾値
-    const int BAND_WIDTH = 80;
-    const double SIGMA_THRES = 3.0;
     // 返す配列の先頭に置く値の数 (width, height, bandCenterY)
     const int HEADER_SIZE = 3;
 
@@ -77,96 +75,15 @@ namespace
         return f;
     }
 
-    // b g r (makecsv と同じ割り当て)
-    int bayerChannel(int x, int y)
-    {
-        if (x % 2 != 0 && y % 2 == 0)
-            return 0;
-        if (x % 2 == 0 && y % 2 != 0)
-            return 2;
-        return 1;
-    }
-
-    // 列 x の帯 [y1, y2) を, チャネルごとに sigma clipping した平均の和にする (makecsv と同じ計算)
-    double columnValue(const cv::Mat &img, int x, int y1, int y2, bool isRaw)
-    {
-        int count[3] = {0, 0, 0};
-        double mean[3] = {0, 0, 0};
-        double sigma[3] = {0, 0, 0};
-        double sum[3] = {0, 0, 0};
-        for (int y = y1; y < y2; y++)
-        {
-            int ch = isRaw ? bayerChannel(x, y) : 1;
-            mean[ch] += img.at<float>(y, x);
-            count[ch]++;
-        }
-        for (int c = 0; c < 3; c++)
-            if (count[c] > 0)
-                mean[c] /= count[c];
-        for (int y = y1; y < y2; y++)
-        {
-            int ch = isRaw ? bayerChannel(x, y) : 1;
-            double d = img.at<float>(y, x) - mean[ch];
-            sigma[ch] += d * d;
-        }
-        for (int c = 0; c < 3; c++)
-            if (count[c] > 0)
-                sigma[c] = std::sqrt(sigma[c] / count[c]);
-        for (int y = y1; y < y2; y++)
-        {
-            int ch = isRaw ? bayerChannel(x, y) : 1;
-            double v = img.at<float>(y, x);
-            if (SIGMA_THRES * sigma[ch] < std::fabs(v - mean[ch]))
-            {
-                count[ch]--;
-            }
-            else
-            {
-                sum[ch] += std::max(v, 0.0);
-            }
-        }
-        double total = 0;
-        for (int c = 0; c < 3; c++)
-            total += sum[c] / std::max(count[c], 1);
-        return total;
-    }
-
-    // スペクトルの帯が写っている行 (0次光を除いた左 75% の行和が最大の行). 見つからなければ -1
-    int detectBandCenter(const cv::Mat &img)
-    {
-        const int h = img.rows;
-        const int xEnd = std::max(1, (int)(img.cols * 0.75));
-        std::vector<double> rowSum(h, 0.0);
-        for (int y = 0; y < h; y++)
-        {
-            const float *row = img.ptr<float>(y);
-            double s = 0;
-            for (int x = 0; x < xEnd; x++)
-                s += std::max(row[x], 0.0f);
-            rowSum[y] = s;
-        }
-        // 2行周期の Bayer の段差をならす
-        int best = -1;
-        double bestVal = 0;
-        for (int y = 2; y < h - 2; y++)
-        {
-            double s = rowSum[y - 2] + rowSum[y - 1] + rowSum[y] + rowSum[y + 1] + rowSum[y + 2];
-            if (s > bestVal)
-            {
-                bestVal = s;
-                best = y;
-            }
-        }
-        return best;
-    }
 }
 
 extern "C"
 {
     // 画像を解析して [width, height, bandCenterY, profile[0], ..., profile[width-1]] を返す.
-    // profile[x] は makecsv と同じ中央 80px 帯の列ごとの値. 失敗時は null
+    // profile[x] は makecsv と同じ帯 (bandWidth, bandCenter) の列ごとの値 (共通コアの columnProfile). 失敗時は null
     JNIEXPORT jdoubleArray JNICALL
-    Java_com_example_ssa_SpectrumCalibrator_analyzeImageNative(JNIEnv *env, jclass, jint fd)
+    Java_com_example_ssa_SpectrumCalibrator_analyzeImageNative(JNIEnv *env, jclass, jint fd,
+                                                               jint bandWidth, jdouble bandCenter, jint cfa)
     {
         try
         {
@@ -174,17 +91,25 @@ extern "C"
             cv::Mat img = decodeAsFloat(fd, isRaw);
             if (img.empty() || img.rows < 1 || img.cols < 1)
                 return nullptr;
-            const int h = img.rows;
-            const int w = img.cols;
-            int y1 = std::max(0, h / 2 - BAND_WIDTH / 2);
-            int y2 = std::min(h, h / 2 + BAND_WIDTH / 2);
+            fk::ImageView view;
+            view.data = img.ptr<float>(0);
+            view.width = img.cols;
+            view.height = img.rows;
+            view.stride = img.step1();
+            fk::SpectrumParams params;
+            params.bandWidth = bandWidth;
+            params.bandCenter = bandCenter;
+            // カラー画像 (jpg など) はグレーにしてあるので Bayer として扱わない
+            params.cfa = !isRaw ? fk::Cfa::Mono
+                                : (cfa >= (int)fk::Cfa::RGGB && cfa <= (int)fk::Cfa::Mono) ? (fk::Cfa)cfa
+                                                                                          : fk::Cfa::GBRG;
 
-            std::vector<double> out(HEADER_SIZE + w);
-            out[0] = w;
-            out[1] = h;
-            out[2] = detectBandCenter(img);
-            for (int x = 0; x < w; x++)
-                out[HEADER_SIZE + x] = columnValue(img, x, y1, y2, isRaw);
+            std::vector<double> profile = fk::columnProfile(view, params);
+            std::vector<double> out(HEADER_SIZE + profile.size());
+            out[0] = view.width;
+            out[1] = view.height;
+            out[2] = fk::detectBandCenter(view);
+            std::copy(profile.begin(), profile.end(), out.begin() + HEADER_SIZE);
 
             jdoubleArray arr = env->NewDoubleArray((jsize)out.size());
             if (arr == nullptr)

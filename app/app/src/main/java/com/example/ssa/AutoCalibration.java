@@ -132,10 +132,18 @@ final class AutoCalibration {
 
     /**
      * seq の darked.tif → stacked.tif の順に, 解析できた最初の画像を返す.
+     * 積算する帯とカラーフィルタ配列は端末プロファイルのものを使う (makecsv と同じ).
      * 空や壊れたファイル (失敗したダーク減算の残骸など) は飛ばして次の候補を使う.
      * 重いので UI スレッドから呼ばないこと.
      */
-    static Analysis analyzeSequence(ContentResolver resolver, String seq) throws SpectrumCalibrator.CalibrationException {
+    static Analysis analyzeSequence(ContentResolver resolver, String seq, DeviceProfile profile, int cfa)
+            throws SpectrumCalibrator.CalibrationException {
+        return analyzeSequence(resolver, seq, profile.bandWidth(), profile.bandCenter(), cfa);
+    }
+
+    /** 積算する帯を指定して解析する (新しい端末のセットアップで, 帯の位置がまだ分からないとき) */
+    static Analysis analyzeSequence(ContentResolver resolver, String seq, int bandWidth, double bandCenter, int cfa)
+            throws SpectrumCalibrator.CalibrationException {
         boolean found = false;
         for (String name : IMAGE_NAMES) {
             Uri uri = find(resolver, imageDir(seq), name);
@@ -148,7 +156,8 @@ final class AutoCalibration {
                     continue;
                 }
                 SpectrumCalibrator.ImageProfile img =
-                        SpectrumCalibrator.ImageProfile.fromNative(SpectrumCalibrator.analyzeImageNative(pfd.getFd()));
+                        SpectrumCalibrator.ImageProfile.fromNative(SpectrumCalibrator.analyzeImageNative(pfd.getFd(),
+                                bandWidth, bandCenter, cfa));
                 if (img != null) {
                     return new Analysis(name, img);
                 }
