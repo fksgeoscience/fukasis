@@ -6,7 +6,8 @@ val localPropertiesFile = rootProject.file("local.properties")
 if (localPropertiesFile.exists()) {
     localProperties.load(localPropertiesFile.inputStream())
 }
-val openCvPath = localProperties.getProperty("opencv.dir") ?: ""
+val openCvPath = localProperties.getProperty("opencv.dir")
+    ?: file("src/main/sdk/native/jni").absolutePath
 plugins {
     alias(libs.plugins.android.application)
 }

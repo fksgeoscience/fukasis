@@ -12,7 +12,11 @@ cmake_minimum_required(VERSION 3.22.1)
 project("ssa")
 
 
-set(OpenCV_DIR ${OPENCV_DIR})
+if(NOT OPENCV_DIR OR NOT EXISTS "${OPENCV_DIR}/OpenCVConfig.cmake")
+    set(OPENCV_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../sdk/native/jni")
+endif()
+
+set(OpenCV_DIR "${OPENCV_DIR}")
 
 include_directories(${OpenCV_DIR}/include)
 
