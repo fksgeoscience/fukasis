@@ -484,7 +484,7 @@ cargo install fukasis
 
 `Internal_Storage/Documents/FUKASIS-app/`をPCにコピーして使ってください。
 
-新しいバージョンを出す手順は[docs/releasing.md](./docs/releasing.md)にあります。
+開発の流れ（ブランチ・PR・公開）は[docs/development.md](./docs/development.md)、新しいバージョンを出す手順は[docs/releasing.md](./docs/releasing.md)にあります。
 
 <br><br><br><br>
 
