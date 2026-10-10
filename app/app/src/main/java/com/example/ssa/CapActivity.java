@@ -104,6 +104,9 @@ public class CapActivity extends AppCompatActivity {
 
         binding = ActivityCapBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
+        // プレビューとガイド線の位置は画面の左上が基準なので, 画面全体はずらさず, 操作パネルだけに余白を付ける
+        SystemBars.pad(binding.getRoot(), binding.controls,
+                SystemBars.TOP | SystemBars.RIGHT | SystemBars.BOTTOM, true);
 
         // setContentView(R.layout.activity_main);
 

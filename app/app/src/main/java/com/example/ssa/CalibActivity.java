@@ -121,6 +121,7 @@ public class CalibActivity extends AppCompatActivity{
 
         binding = ActivityCalibBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
+        SystemBars.pad(binding.getRoot());
 
         //setContentView(R.layout.activity_main);
 

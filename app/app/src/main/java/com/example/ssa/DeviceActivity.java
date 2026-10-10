@@ -47,6 +47,7 @@ public class DeviceActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         binding = ActivityDeviceBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
+        SystemBars.pad(binding.getRoot(), binding.getRoot(), SystemBars.ALL, true);
 
         binding.exportReport.setOnClickListener(v -> exportReport());
         binding.estimate.setOnClickListener(v -> estimate());

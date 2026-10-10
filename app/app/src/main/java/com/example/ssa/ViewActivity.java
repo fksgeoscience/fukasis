@@ -5,12 +5,8 @@ package com.example.ssa;
 import android.graphics.Color;
 import android.os.Bundle;
 
-import androidx.activity.EdgeToEdge;
 import androidx.appcompat.app.AppCompatActivity;
 import com.example.ssa.databinding.ActivityViewBinding;
-import androidx.core.graphics.Insets;
-import androidx.core.view.ViewCompat;
-import androidx.core.view.WindowInsetsCompat;
 // MPAndroidChart
 import com.github.mikephil.charting.charts.LineChart;
 import com.github.mikephil.charting.components.XAxis;
@@ -70,6 +66,7 @@ public class ViewActivity extends AppCompatActivity {
 
         binding = ActivityViewBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
+        SystemBars.pad(binding.getRoot());
 
         lineChart = binding.lineChart;
         info = binding.info;

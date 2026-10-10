@@ -36,6 +36,7 @@ public class MainActivity extends AppCompatActivity {
 
         binding = ActivityMainBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
+        SystemBars.pad(binding.getRoot());
 
         Button cap = binding.capBtn;
         cap.setOnClickListener(new View.OnClickListener(){
