@@ -1,7 +1,7 @@
 # 開発の流れ (ブランチ・PR・公開)
 
 変更を 2 つのリポジトリ (legrs / fksgeoscience) に PR として出し、PC 用ツール (web / cli) を公開するまでの流れです。
-公開そのものの細かい手順は [releasing.md](./releasing.md) にあります。
+公開そのものの細かい手順は [releasing.md](./releasing.md)、アプリ・web 版・CLI 版の違いは [platforms.md](./platforms.md) にあります。
 
 ## リポジトリとブランチの役割
 
