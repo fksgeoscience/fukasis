@@ -34,6 +34,8 @@
     let markers = []; // {id, x, color, label, active}
     let peaks = []; // [x, ...]
     let scaleTicks = []; // [{x, label}]
+    let refLines = []; // [{x, label}] 校正式から求めた, 既知の輝線が来るはずの位置
+    let overlay = null; // 列ごとの参照データの値 (校正式で画像の位置に直したもの). 無い列は NaN
     let profileLimit = null; // この x より左だけを見て, プロファイルの縦の範囲を決める (0次光で潰れないように)
 
     const cssVar = (name) => getComputedStyle(container).getPropertyValue(name).trim();
@@ -120,10 +122,66 @@
         max = Math.max(max, profile[x]);
       }
       if (!(max > min)) max = min + 1;
-      const top = 18;
+      // 参照線を出すときは, 名前を書く段 (3 段) の分だけ上を空ける
+      const REF_ROW = 13;
+      const top = 18 + (refLines.length ? 3 * REF_ROW : 0);
       const bottom = H - 18;
       const sy = (v) => bottom - Math.max(0, Math.min(1.05, (v - min) / (max - min))) * (bottom - top);
       const sx = (x) => ((x + 0.5) / img.width) * W;
+
+      // 参照線 (既知の輝線が来るはずの位置). 名前が重ならないよう, 空いている段に置く
+      if (refLines.length) {
+        ctx.font = '11px system-ui, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+        ctx.lineWidth = 1;
+        const rowEnd = [-Infinity, -Infinity, -Infinity];
+        const sorted = refLines.slice().sort((a, b) => a.x - b.x);
+        for (const line of sorted) {
+          const px = Math.round(sx(line.x)) + 0.5;
+          const row = rowEnd.findIndex((end) => end + 6 < px);
+          ctx.strokeStyle = cssVar('--text-muted');
+          ctx.setLineDash([3, 3]);
+          ctx.beginPath();
+          ctx.moveTo(px, row < 0 ? top - 10 : 2 + (row + 1) * REF_ROW - 2);
+          ctx.lineTo(px, bottom);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          if (row < 0) continue; // 3 段とも埋まっていたら線だけ出す
+          rowEnd[row] = px + 3 + ctx.measureText(line.label).width;
+          ctx.fillStyle = cssVar('--text-secondary');
+          ctx.fillText(line.label, px + 3, 2 + row * REF_ROW);
+        }
+      }
+
+      // 参照データ (校正式で画像の位置に直したもの). 縦は参照データ自身の最小〜最大に合わせる
+      if (overlay) {
+        let oMin = Infinity;
+        let oMax = -Infinity;
+        for (let x = 0; x < img.width; x++) {
+          if (!Number.isFinite(overlay[x])) continue;
+          oMin = Math.min(oMin, overlay[x]);
+          oMax = Math.max(oMax, overlay[x]);
+        }
+        if (oMax > oMin) {
+          ctx.strokeStyle = cssVar('--accent');
+          ctx.lineWidth = 1.25;
+          ctx.lineJoin = 'round';
+          ctx.beginPath();
+          let pen = false;
+          for (let x = 0; x < img.width; x++) {
+            if (!Number.isFinite(overlay[x])) {
+              pen = false;
+              continue;
+            }
+            const py = bottom - ((overlay[x] - oMin) / (oMax - oMin)) * (bottom - top);
+            if (pen) ctx.lineTo(sx(x), py);
+            else ctx.moveTo(sx(x), py);
+            pen = true;
+          }
+          ctx.stroke();
+        }
+      }
 
       // 輝線の候補
       ctx.fillStyle = cssVar('--accent');
@@ -218,6 +276,13 @@
       if (!img || dragging || e.target.closest('.marker')) return;
       if (handlers.onPick) handlers.onPick(xFromEvent(e));
     });
+    // ポインタの位置を知らせる (位置や波長の読み取り用)
+    inner.addEventListener('pointermove', (e) => {
+      if (img && handlers.onHover) handlers.onHover(xFromEvent(e));
+    });
+    inner.addEventListener('pointerleave', () => {
+      if (handlers.onHover) handlers.onHover(null);
+    });
 
     if (window.ResizeObserver) new ResizeObserver(renderProfile).observe(scroll);
     window.addEventListener('resize', renderProfile);
@@ -253,6 +318,17 @@
       },
       setScaleTicks(next) {
         scaleTicks = next;
+        renderProfile();
+      },
+      // 参照データを重ねる. next は列ごとの値 (無い列は NaN) か null
+      setOverlay(next) {
+        overlay = next;
+        renderProfile();
+      },
+      // 参照線 [{x, label}]. 名前を書く分, プロファイルを少し高くする
+      setReferenceLines(next) {
+        refLines = next || [];
+        container.classList.toggle('with-refs', refLines.length > 0);
         renderProfile();
       },
       setProfileLimit(next) {

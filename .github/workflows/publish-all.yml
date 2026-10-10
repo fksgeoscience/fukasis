@@ -160,12 +160,12 @@ jobs:
             gh release upload "$tag" release/* --clobber
           else
             # タグ pc-v$VERSION があればそれを使い, 無ければビルドしたコミットに作る.
-            # アプリ本体 (APK) のリリースを「Latest」のままにするため --latest=false にする
+            # 通常のリリースとして作る (「Latest」になる). 0.1.0-rc.1 のように - の付く番号だけ Pre-release にする
             target="$(git rev-parse HEAD)"
             prerelease=""
-            [[ "$VERSION" == 0.* || "$VERSION" == *-* ]] && prerelease="--prerelease"
+            [[ "$VERSION" == *-* ]] && prerelease="--prerelease"
             gh release create "$tag" release/* --target "$target" --title "FUKASIS for PC v$VERSION" \
-              --generate-notes --latest=false $prerelease
+              --generate-notes $prerelease
           fi
 
   npm:
