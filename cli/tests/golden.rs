@@ -142,6 +142,34 @@ fn color_filter_arrangement_from_metadata() {
 }
 
 #[test]
+fn no_sensitivity_correction() {
+    let cal = calib::parse_calibration(&testdata("calib_4pt.csv")).unwrap();
+    let raw_options = spectrum::Options {
+        no_sensitivity: true,
+        ..spectrum::Options::default()
+    };
+    // 感度がどの波長でも同じなら, 校正してもしなくても (最大値で割ったあとは) 同じになる
+    let flat = spectrum::parse_sensitivity("a\nb\n300,1,2,3\n800,1,2,3\n").unwrap();
+    let corrected = spectrum::extract(&darked(), &cal, &flat, FOL).unwrap();
+    let none = spectrum::Sensitivity::default();
+    let raw = spectrum::extract_with(&darked(), &cal, &none, FOL, &raw_options).unwrap();
+    assert_eq!(raw.wavelength, corrected.wavelength);
+    for (a, b) in raw.intensity.iter().zip(&corrected.intensity) {
+        assert!((a - b).abs() < 1e-12);
+    }
+    // 感度校正をする (既定) のに感度データが無ければエラー
+    assert!(spectrum::extract(&darked(), &cal, &none, FOL).is_err());
+    // 感度校正をした結果とは違う
+    let real = spectrum::parse_sensitivity(&testdata("sensitivity.csv")).unwrap();
+    let real = spectrum::extract(&darked(), &cal, &real, FOL).unwrap();
+    assert!(real
+        .intensity
+        .iter()
+        .zip(&raw.intensity)
+        .any(|(a, b)| (a - b).abs() > 1e-3));
+}
+
+#[test]
 fn spectrum_survives_tiff_roundtrip() {
     // TIFF に書いて読み直しても同じ画像になる
     let img = darked();
@@ -242,6 +270,31 @@ fn command_line_end_to_end() {
         spectrum_csv.lines().count(),
         testdata("expected_spectrum_4pt.csv").lines().count()
     );
+
+    // csv --no-sensitivity: 感度データ無しで出力でき, 1 行目に印が付く
+    run(&[
+        "csv",
+        "--image",
+        &path("darked.tif"),
+        "--calib",
+        &data("calib_4pt.csv"),
+        "--no-sensitivity",
+        "--metadata",
+        &data("metadata.csv"),
+        "-o",
+        &path("raw.csv"),
+    ]);
+    let raw_csv = std::fs::read_to_string(path("raw.csv")).unwrap();
+    assert_eq!(raw_csv.lines().count(), spectrum_csv.lines().count());
+    assert_eq!(
+        raw_csv.lines().next().unwrap(),
+        format!(
+            "{}{}",
+            testdata("metadata.csv").lines().next().unwrap(),
+            spectrum::NO_SENSITIVITY_MARK
+        )
+    );
+    assert_ne!(raw_csv, spectrum_csv);
 
     // graph
     let (_, log) = run(&[

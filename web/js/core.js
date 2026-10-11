@@ -396,6 +396,19 @@
     return f;
   }
 
+  // 校正式 f で波長が nm になる, 0次光からの距離 t (px, 小数). 出力範囲 range の中に無ければ null.
+  // range の中では波長は単調なので, 見つかるのは 1 か所だけ
+  function positionOfWavelength(f, range, nm) {
+    if (!f || !f.ok || !range) return null;
+    for (let t = range.lo; t < range.hi; t++) {
+      const a = polyAt(f, t) - nm;
+      const b = polyAt(f, t + 1) - nm;
+      if (a === 0) return t;
+      if (a * b < 0) return t + a / (a - b);
+    }
+    return polyAt(f, range.hi) === nm ? range.hi : null;
+  }
+
   // スペクトルとして出力する t の範囲 {lo, hi, cutLow, cutHigh} を決める. t は 1 .. size-2 を動く.
   // 校正点の真ん中から両側へ, 波長が単調に変化している間だけ広げ,
   // そのうち波長が (WAVELENGTH_MIN, WAVELENGTH_MAX) に入る部分を返す. 出力するものが無ければ null.
@@ -500,7 +513,8 @@
   }
 
   // 画像からスペクトルを取り出す. fol は 0次光の位置 (画像の x 座標, px).
-  // options は {bandWidth, bandCenter, cfa} (どれも省略できる. 既定は 80 px, 0.5, 'GBRG').
+  // options は {bandWidth, bandCenter, cfa, noSensitivity} (どれも省略できる. 既定は 80 px, 0.5, 'GBRG', false).
+  // noSensitivity が true なら感度校正をしない (sensitivity は使わないので null でよい).
   // 返すのは {wavelength, intensity, fit, range}. intensity は最大値が 1 になるように正規化した相対強度.
   // 出力できないときはエラーを投げる
   function extract(img, cal, sensitivity, fol, options) {
@@ -517,7 +531,8 @@
     // t -> 波長 の対応. 4 点ならその 4 点を通る 3 次式, 5 点以上なら 3 次の最小二乗
     const f = fit(cal.t, cal.c);
     if (!f.ok) throw new Error('校正データから波長を求められません');
-    if (sensitivity.wavelength.length < 2) throw new Error('感度データが足りません');
+    const useSensitivity = !opts.noSensitivity;
+    if (useSensitivity && (!sensitivity || sensitivity.wavelength.length < 2)) throw new Error('感度データが足りません');
 
     const cfa = opts.cfa ? parseCfa(opts.cfa) : 'GBRG';
     if (cfa === null) throw new Error('カラーフィルタ配列 ' + opts.cfa + ' は分かりません');
@@ -582,7 +597,7 @@
     for (let i = range.lo; i <= range.hi; i++) {
       const tp = polyAt(f, i);
       if (!(WAVELENGTH_MIN < tp && tp < WAVELENGTH_MAX)) continue;
-      const s = sensitivityAt(sensitivity, tp);
+      const s = useSensitivity ? sensitivityAt(sensitivity, tp) : 1;
       if (!(s > 0)) continue; // 感度 0 の波長は補正できない
       let bgr = 0;
       for (let c = 0; c < 3; c++) {
@@ -598,6 +613,66 @@
     if (!(max > 0)) throw new Error('スペクトルの強度が 0 です');
     for (let i = 0; i < intensity.length; i++) intensity[i] /= max;
     return { wavelength, intensity, fit: f, range };
+  }
+
+  // 感度校正をしなかったスペクトルの 1 行目 (観測の情報) に付ける印
+  const NO_SENSITIVITY_MARK = ', sensitivity none';
+
+  // ---------------------------------------------------------------- 参照データ (波長校正の手がかり)
+
+  // 参照用のスペクトル (波長, 強度) を読む. 太陽のスペクトルなど, ほかで手に入れたデータを想定している.
+  //   - 区切りはカンマ / タブ / 空白 / セミコロン. 数値で始まらない行 (ヘッダーやコメント) は読み飛ばす
+  //   - 波長の単位は nm. 値の大きさから Å や µm と分かるときは nm に直す
+  //   - 波長の小さい順に並べ, 同じ波長は最初のものだけ残す
+  // 返すのは {x, y, unit}. unit は読み取った単位 ('nm' / 'Å' / 'µm')
+  function parseReference(text) {
+    const points = [];
+    for (const line of text.split(/\r?\n/)) {
+      const fields = line.trim().split(/[,;\t ]+/);
+      if (fields.length < 2) continue;
+      const a = parseValue(fields[0]);
+      const b = parseValue(fields[1]);
+      if (a === null || b === null || !Number.isFinite(a) || !Number.isFinite(b)) continue;
+      points.push([a, b]);
+    }
+    if (points.length < 2) throw new Error('参照データに数値の行が 2 行以上ありません (波長, 強度 の 2 列が必要です)');
+    points.sort((p, q) => p[0] - q[0]);
+    // 可視光は 380 - 780 nm = 3800 - 7800 Å = 0.38 - 0.78 µm
+    const last = points[points.length - 1][0];
+    let unit = 'nm';
+    let scale = 1;
+    if (last > 2000) {
+      unit = 'Å';
+      scale = 0.1;
+    } else if (last < 20) {
+      unit = 'µm';
+      scale = 1000;
+    }
+    const x = [];
+    const y = [];
+    for (const [a, b] of points) {
+      const nm = a * scale;
+      if (x.length && nm === x[x.length - 1]) continue;
+      x.push(nm);
+      y.push(b);
+    }
+    if (x.length < 2) throw new Error('参照データの波長が 1 種類しかありません');
+    return { x, y, unit };
+  }
+
+  // 小さい順に並んだ xs の上で, x での値を線形補間する. xs の範囲の外なら NaN
+  function interpolate(xs, ys, x) {
+    const n = xs.length;
+    if (n === 0 || !(x >= xs[0] && x <= xs[n - 1])) return NaN;
+    let lo = 0;
+    let hi = n - 1;
+    while (hi - lo > 1) {
+      const mid = (lo + hi) >> 1;
+      if (xs[mid] <= x) lo = mid;
+      else hi = mid;
+    }
+    if (hi === lo || xs[hi] === xs[lo]) return ys[lo];
+    return ys[lo] + ((x - xs[lo]) * (ys[hi] - ys[lo])) / (xs[hi] - xs[lo]);
   }
 
   const LABEL_LINE = 'wavelength/nm,relative intensity(0.0 -- 1.0)';
@@ -849,6 +924,7 @@
     polyAt,
     fit,
     outputRange,
+    positionOfWavelength,
     parseSensitivity,
     sensitivityAt,
     parseCfa,
@@ -856,6 +932,9 @@
     channelOf,
     extract,
     toCsv,
+    NO_SENSITIVITY_MARK,
+    parseReference,
+    interpolate,
     parseCsv,
     filter,
     niceTicks,

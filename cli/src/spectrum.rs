@@ -69,6 +69,8 @@ pub struct Options {
     pub band_width: usize,
     pub band_center: f64,
     pub cfa: Cfa,
+    /// true なら感度校正をしない (感度データは使わない)
+    pub no_sensitivity: bool,
 }
 
 impl Default for Options {
@@ -77,6 +79,7 @@ impl Default for Options {
             band_width: BAND_WIDTH,
             band_center: 0.5,
             cfa: Cfa::Gbrg,
+            no_sensitivity: false,
         }
     }
 }
@@ -192,7 +195,7 @@ pub fn extract_with(
     if !fit.ok {
         return Err("校正データから波長を求められません".to_string());
     }
-    if sensitivity.wavelength.len() < 2 {
+    if !options.no_sensitivity && sensitivity.wavelength.len() < 2 {
         return Err("感度データが足りません".to_string());
     }
 
@@ -279,7 +282,11 @@ pub fn extract_with(
         if !(WAVELENGTH_MIN < t_p && t_p < WAVELENGTH_MAX) {
             continue;
         }
-        let s = sensitivity.total_at(t_p);
+        let s = if options.no_sensitivity {
+            1.0
+        } else {
+            sensitivity.total_at(t_p)
+        };
         if !(s > 0.0) {
             continue; // 感度 0 の波長は補正できない
         }
@@ -315,6 +322,8 @@ pub fn extract_with(
 }
 
 pub const LABEL_LINE: &str = "wavelength/nm,relative intensity(0.0 -- 1.0)";
+/// 感度校正をしなかったスペクトルの 1 行目 (観測の情報) に付ける印
+pub const NO_SENSITIVITY_MARK: &str = ", sensitivity none";
 
 /// アプリと同じ形式の csv にする. 1 行目は観測の情報 (metadata.csv の 1 行目), 2 行目はラベル
 pub fn to_csv(spectrum: &Spectrum, header: &str) -> String {

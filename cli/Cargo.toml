@@ -1,6 +1,6 @@
 [package]
 name = "fukasis"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 description = "Process spectra captured with FUKASIS-app on a PC: dark subtraction, wavelength calibration, CSV export and SVG graphs"
 license = "MIT"
