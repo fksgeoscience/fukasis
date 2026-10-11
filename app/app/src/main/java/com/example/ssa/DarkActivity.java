@@ -53,6 +53,7 @@ public class DarkActivity extends AppCompatActivity{
 
         binding = ActivityDarkBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
+        SystemBars.pad(binding.getRoot());
 
         //setContentView(R.layout.activity_main);
 

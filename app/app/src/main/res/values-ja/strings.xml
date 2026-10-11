@@ -3,6 +3,8 @@
     <string name="hint_sequence_name">観測名</string>
     <string name="hint_calibration_data_name">校正データ名</string>
     <string name="open_image">画像を開く</string>
+    <string name="auto_detect_calib">自動検出 (0次光と輝線)</string>
+    <string name="auto_detect_csv">自動 (0次光・校正・感度データ)</string>
     <string name="export_csv">CSV を出力</string>
     <string name="back">戻る</string>
 

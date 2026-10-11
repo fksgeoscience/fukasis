@@ -49,6 +49,8 @@
     <string name="hint_sequence_name">Sequence Name</string>
     <string name="hint_calibration_data_name">Calibration Data Name</string>
     <string name="open_image">open image</string>
+    <string name="auto_detect_calib">Auto detect (0th order &amp; lines)</string>
+    <string name="auto_detect_csv">Auto (0th order / calibration / sensitivity)</string>
     <string name="export_csv">export csv</string>
     <string name="back">Back</string>
 

@@ -46,10 +46,16 @@
             android:layout_height="match_parent"
             android:layout_weight="0.5">
 
+        <!-- プレビューや画面の端にボタンがぴったり付かないよう, 左右に余白を取る.
+             システムバーの分の余白は CapActivity (SystemBars) が足す -->
         <LinearLayout
+            android:id="@+id/controls"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical">
+            android:orientation="vertical"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:paddingBottom="16dp">
 
             <Space
                 android:layout_width="match_parent"
@@ -66,7 +72,8 @@
     android:layout_height="wrap_content"
     android:orientation="horizontal"
     android:gravity="center_vertical"
-    android:padding="8dp">
+    android:paddingTop="8dp"
+    android:paddingBottom="8dp">
 
     <SeekBar
         android:id="@+id/focus_bar"
@@ -78,13 +85,12 @@
 
     <androidx.appcompat.widget.AppCompatImageView
         android:id="@+id/focus_lock"
-        android:layout_width="32dp"
-        android:layout_height="32dp"
-        android:layout_marginStart="8dp"
+        android:layout_width="44dp"
+        android:layout_height="44dp"
         android:background="?attr/selectableItemBackgroundBorderless"
         android:clickable="true"
         android:focusable="true"
-        android:padding="4dp"
+        android:padding="10dp"
         android:src="@drawable/ic_unlock" />
 
 </LinearLayout>
@@ -99,7 +105,8 @@
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
                 android:gravity="center_vertical"
-                android:padding="8dp">
+                android:paddingTop="8dp"
+                android:paddingBottom="8dp">
 
                 <SeekBar
                     android:id="@+id/iso_bar"
@@ -111,13 +118,12 @@
 
                 <androidx.appcompat.widget.AppCompatImageView
                     android:id="@+id/iso_lock"
-                    android:layout_width="32dp"
-                    android:layout_height="32dp"
-                    android:layout_marginStart="8dp"
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
                     android:background="?attr/selectableItemBackgroundBorderless"
                     android:clickable="true"
                     android:focusable="true"
-                    android:padding="4dp"
+                    android:padding="10dp"
                     android:src="@drawable/ic_unlock" />
             </LinearLayout>
 
@@ -153,7 +159,8 @@
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
                 android:gravity="center_vertical"
-                android:padding="8dp">
+                android:paddingTop="8dp"
+                android:paddingBottom="8dp">
 
                 <SeekBar
                     android:id="@+id/expo_bar"
@@ -165,13 +172,12 @@
 
                 <androidx.appcompat.widget.AppCompatImageView
                     android:id="@+id/expo_lock"
-                    android:layout_width="32dp"
-                    android:layout_height="32dp"
-                    android:layout_marginStart="8dp"
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
                     android:background="?attr/selectableItemBackgroundBorderless"
                     android:clickable="true"
                     android:focusable="true"
-                    android:padding="4dp"
+                    android:padding="10dp"
                     android:src="@drawable/ic_unlock" />
             </LinearLayout>
 
@@ -181,7 +187,8 @@
 
             <Button
                 android:id="@+id/zoomFF"
-                android:layout_width="wrap_content"
+                style="@style/CaptureButton"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="@string/zoom_for_focusing" />
 
@@ -191,7 +198,8 @@
 
             <Button
                 android:id="@+id/zoomFP"
-                android:layout_width="wrap_content"
+                style="@style/CaptureButton"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="@string/zoom_for_pointing" />
 
@@ -261,15 +269,17 @@
 
                 <Button
                     android:id="@+id/cap"
-                    android:layout_width="wrap_content"
+                    style="@style/CaptureButton"
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
+                    android:layout_weight="1"
                     android:text="@string/capture" />
 
                 <androidx.appcompat.widget.AppCompatImageView
                     android:id="@+id/capture_status_icon"
                     android:layout_width="32dp"
                     android:layout_height="32dp"
-                    android:layout_marginStart="12dp"
+                    android:layout_marginStart="8dp"
                     android:background="?attr/selectableItemBackgroundBorderless"
                     android:clickable="false"
                     android:focusable="false"
@@ -281,7 +291,8 @@
 
             <Button
                 android:id="@+id/sat_check"
-                android:layout_width="wrap_content"
+                style="@style/CaptureButton"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="@string/check_saturation" />
 
@@ -293,7 +304,8 @@
 
             <Button
                 android:id="@+id/switch_line"
-                android:layout_width="wrap_content"
+                style="@style/CaptureButton"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="@string/switch_line" />
                     
@@ -302,25 +314,26 @@
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:padding="8dp">
+        android:paddingTop="8dp"
+        android:paddingBottom="8dp">
 
 
                 <SeekBar
                     android:id="@+id/line_bar"
-                    android:layout_width="match_parent"
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
+                    android:layout_weight="1"
                     android:max="1000"
                     android:min="0" />
 
         <androidx.appcompat.widget.AppCompatImageView
             android:id="@+id/line_lock"
-            android:layout_width="32dp"
-            android:layout_height="32dp"
-            android:layout_marginStart="8dp"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:clickable="true"
             android:focusable="true"
-            android:padding="4dp"
+            android:padding="10dp"
             android:src="@drawable/ic_unlock" />
 
 

@@ -81,6 +81,7 @@ public class CsvActivity extends AppCompatActivity{
 
         binding = ActivityCsvBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
+        SystemBars.pad(binding.getRoot());
 
         //setContentView(R.layout.activity_main);
 
@@ -280,7 +281,7 @@ public class CsvActivity extends AppCompatActivity{
     private void updateFol(int i){
         binding.t1.setText("" + i);
         fol = imgWidth - i;
-        binding.line.setX(dispWidth+(-imgWidth + fol)*scale);
+        binding.line.setX(pos[0]+dispWidth+(-imgWidth + fol)*scale);
         binding.line.setY(pos[1]-50);
     }
 
@@ -384,7 +385,7 @@ public class CsvActivity extends AppCompatActivity{
                 // setProgress は値が変わらないと listener を呼ばないので, fol と線の位置は明示的に反映する
                 fol = imgWidth - p;
                 binding.t1.setText("" + p);
-                binding.line.setX(dispWidth+(-imgWidth + fol)*scale);
+                binding.line.setX(pos[0]+dispWidth+(-imgWidth + fol)*scale);
                 binding.line.setY(pos[1]-50);
                 StringBuilder message = new StringBuilder("0次光を検出しました (" + a.fileName + "): " + p);
                 if (calibName != null && path_et2.getText().toString().trim().isEmpty()) {

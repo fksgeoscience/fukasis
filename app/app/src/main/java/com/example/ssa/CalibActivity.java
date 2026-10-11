@@ -47,6 +47,8 @@ public class CalibActivity extends AppCompatActivity{
     private Activity activity = this;
 
     int[] pos = {0,0};
+    // 左の画像 (輝線用) の画面上の位置. 輝線の線を重ねるのに使う
+    int[] pos1 = {0,0};
     float scale = 0.8F;
     // 表示位置 (画像を開いたときに端末プロファイルのスライダーの範囲から決める. Galaxy S22 では -1200, 350)
     int iv1_ofs = -1200;
@@ -84,14 +86,14 @@ public class CalibActivity extends AppCompatActivity{
         tv[j].setText("" + i);
         t[j] = (imgWidth - i);
         Log.d("a", Integer.toString(fol - t[j]));
-        line[j].setX((t[j] +iv1_ofs)*scale);
+        line[j].setX(pos1[0]+(t[j] +iv1_ofs)*scale);
         line[j].setY(pos[1]-50);
     }
 
     private void changeExtra(int j, int i){
         tvExtra[j].setText("" + i);
         tExtra[j] = (imgWidth - i);
-        lineExtra[j].setX((tExtra[j] +iv1_ofs)*scale);
+        lineExtra[j].setX(pos1[0]+(tExtra[j] +iv1_ofs)*scale);
         lineExtra[j].setY(pos[1]-50);
     }
 
@@ -121,6 +123,7 @@ public class CalibActivity extends AppCompatActivity{
 
         binding = ActivityCalibBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
+        SystemBars.pad(binding.getRoot());
 
         //setContentView(R.layout.activity_main);
 
@@ -252,6 +255,7 @@ public class CalibActivity extends AppCompatActivity{
                     iv2.setImageMatrix(matrix);
 
                     iv2.getLocationOnScreen(pos);
+                    iv1.getLocationOnScreen(pos1);
 
                     // スライダーを動かさずに export しても現在の表示位置が使われるようにする
                     updateFol(sb1.getProgress());
@@ -404,6 +408,7 @@ public class CalibActivity extends AppCompatActivity{
                     return;
                 }
                 iv2.getLocationOnScreen(pos);
+                iv1.getLocationOnScreen(pos1);
                 binding.l1.setY(pos[1]-50);
                 for(int j=0; j<4; j++){
                     line[j].setY(pos[1]-50);

@@ -17,11 +17,14 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
+        android:paddingStart="@dimen/screen_margin"
+        android:paddingEnd="@dimen/screen_margin"
+        android:paddingBottom="@dimen/scroll_bottom_space"
         android:weightSum="1">
 
         <Space
             android:layout_width="match_parent"
-            android:layout_height="50dp" />
+            android:layout_height="16dp" />
 
         <EditText
             android:id="@+id/input1"
@@ -58,7 +61,7 @@
             android:id="@+id/autoFol"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Auto (Fol / Calibration / Sensitivity)" />
+            android:text="@string/auto_detect_csv" />
 
         <Space
             android:layout_width="match_parent"
@@ -78,6 +81,8 @@
             android:id="@+id/iv"
             android:layout_width="match_parent"
             android:layout_height="50dp"
+            android:layout_marginStart="@dimen/screen_margin_negative"
+            android:layout_marginEnd="@dimen/screen_margin_negative"
             android:scaleType="centerCrop"
             app:layout_constraintRight_toRightOf="parent"
             app:srcCompat="@android:drawable/ic_menu_gallery" />
