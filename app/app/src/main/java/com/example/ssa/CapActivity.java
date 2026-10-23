@@ -206,28 +206,13 @@ if (isLine) {
         });
         zoomFF.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
-                if (zoom == 0) {
-                    zoomFF.setText(R.string.unzoom);
-                    zoom = 1;
-                    cam.changeValueOfPreview(0, -100, 0, 1);
-                } else {
-                    zoom = 0;
-                    zoomFF.setText(R.string.zoom_for_focusing);
-                    cam.changeValueOfPreview(0, -100, 0, 0);
-                }
+                // 押すたびに focus と noZoom を行き来する. pointing 中に押したら focus に切り替える
+                setZoom(zoom == 1 ? 0 : 1);
             }
         });
         zoomFP.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
-                if (zoom == 0) {
-                    zoomFP.setText(R.string.unzoom);
-                    zoom = 2;
-                    cam.transformTextures(2);
-                } else {
-                    zoom = 0;
-                    zoomFP.setText(R.string.zoom_for_pointing);
-                    cam.transformTextures(0);
-                }
+                setZoom(zoom == 2 ? 0 : 2);
             }
         });
         expoSw.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
@@ -422,14 +407,7 @@ if (isLine) {
         lineBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int i, boolean b) {
-                // 0 ~ 1000
-                // ガイド線の位置は筐体と画面によるので端末プロファイルから
-                DeviceProfile profile = DeviceProfiles.current(CapActivity.this);
-                if (zoom == 2) {
-                    line.setY((float) profile.guideLineYPointing() + i / 10);
-                } else {
-                    line.setY((float) profile.guideLineY() + i / 10);
-                }
+                updateLineY();
             }
 
             @Override
@@ -458,6 +436,28 @@ if (isLine) {
                     CAMERA_PERMISSION_REQUEST_CODE);
         }
 
+    }
+
+    // ズームを切り替える (0:noZoom 1:focusing 2:pointing).
+    // 2 つのボタンの表示, プレビュー, ガイド線の位置をまとめてそろえる
+    private void setZoom(int mode) {
+        zoom = mode;
+        binding.zoomFF.setText(mode == 1 ? R.string.unzoom : R.string.zoom_for_focusing);
+        binding.zoomFP.setText(mode == 2 ? R.string.unzoom : R.string.zoom_for_pointing);
+        cam.setZoom(mode);
+        updateLineY();
+    }
+
+    // ガイド線の位置 (lineBar: 0 ~ 1000). pointing ではプレビューが拡大されるので別の位置.
+    // 筐体と画面によるので端末プロファイルから
+    private void updateLineY() {
+        DeviceProfile profile = DeviceProfiles.current(this);
+        int i = binding.lineBar.getProgress();
+        if (zoom == 2) {
+            binding.line.setY((float) profile.guideLineYPointing() + i / 10);
+        } else {
+            binding.line.setY((float) profile.guideLineY() + i / 10);
+        }
     }
 
     @Override

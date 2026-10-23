@@ -78,6 +78,7 @@ public class Cam {
 
     private int maxW, maxH;
     private float maxZoom; // 8.0
+    private int zoomMode = 0; // いまのズーム. 0:noZoom 1:focus 2:pointing
 
     // 端末ごとの設定 (プレビューの見せ方・カラーフィルタ配列)
     private DeviceProfile profile;
@@ -327,6 +328,8 @@ public class Cam {
                             // OIS
                             capRequestBuilder.set(CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE,
                                     CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE_OFF);
+                            // 開き直したときも, 前と同じズームで始める
+                            setZoomCrop(zoomMode);
 
                             // preview
                             try {
@@ -353,6 +356,44 @@ public class Cam {
         return r != null ? r.clamp(iso) : iso;
     }
 
+    // ズームを切り替える (0:noZoom 1:focus 2:pointing).
+    // カメラを開く前でも覚えておき, 開いたときに同じズームで始める
+    public void setZoom(int zoom) {
+        if (capRequestBuilder == null || capSession == null) {
+            zoomMode = zoom;
+            transformTextures(zoom);
+            return;
+        }
+        changeValueOfPreview(0, -100, 0, zoom);
+    }
+
+    // センサーの切り出し. focus のときだけ一次光のあたりを 1/4 に切り出し, ほかは全体を使う
+    // (pointing はプレビューの拡大だけで, 切り出しはしない)
+    private void setZoomCrop(int zoom) {
+        Rect sensorRect = camCharacteristics.get(CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE);
+        if (zoom == 1) {
+            int cropW = sensorRect.width() / 4;
+            // int cropH = cropW * maxH/maxW;
+            int cropH = sensorRect.height() / 4;
+            int cropX = (sensorRect.width() - cropW) / 2;
+            int cropY = (int) ((float) profile.focusZoomCenterY() * (float) sensorRect.height() - (float) cropH / 2.0F);
+
+            Log.d("a", String.format("%d,%d,%d,%d", cropX, cropY, cropX + cropW, cropY + cropH));
+
+            Rect zoomRect = new Rect(cropX, cropY, cropX + cropW, cropY + cropH);
+
+            // capRequestBuilder.set(CaptureRequest.CONTROL_ZOOM_RATIO, 3.0f);
+            // capRequestBuilder.set(CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE,
+            // CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE_OFF);
+            capRequestBuilder.set(CaptureRequest.SCALER_CROP_REGION, zoomRect);
+        } else {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                capRequestBuilder.set(CaptureRequest.CONTROL_ZOOM_RATIO, 1.0f);
+            }
+            capRequestBuilder.set(CaptureRequest.SCALER_CROP_REGION, sensorRect);
+        }
+    }
+
     // iso 50,64,80,100,
     // 125,160,200,250,
     // 320,400,500,640,
@@ -371,30 +412,9 @@ public class Cam {
             capRequestBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, expo);
         }
         if (zoom != -1) {
-            Rect sensorRect = camCharacteristics.get(CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE);
-            if (zoom == 0) {
-                transformTextures(0);
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                    capRequestBuilder.set(CaptureRequest.CONTROL_ZOOM_RATIO, 1.0f);
-                }
-                capRequestBuilder.set(CaptureRequest.SCALER_CROP_REGION, sensorRect);
-            } else if (zoom == 1) {
-                transformTextures(1);
-                int cropW = sensorRect.width() / 4;
-                // int cropH = cropW * maxH/maxW;
-                int cropH = sensorRect.height() / 4;
-                int cropX = (sensorRect.width() - cropW) / 2;
-                int cropY = (int) ((float) profile.focusZoomCenterY() * (float) sensorRect.height() - (float) cropH / 2.0F);
-
-                Log.d("a", String.format("%d,%d,%d,%d", cropX, cropY, cropX + cropW, cropY + cropH));
-
-                Rect zoomRect = new Rect(cropX, cropY, cropX + cropW, cropY + cropH);
-
-                // capRequestBuilder.set(CaptureRequest.CONTROL_ZOOM_RATIO, 3.0f);
-                // capRequestBuilder.set(CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE,
-                // CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE_OFF);
-                capRequestBuilder.set(CaptureRequest.SCALER_CROP_REGION, zoomRect);
-            }
+            zoomMode = zoom;
+            transformTextures(zoom);
+            setZoomCrop(zoom);
         }
 
         // preview
@@ -1072,7 +1092,7 @@ public class Cam {
                 // max resolution
                 surface.setDefaultBufferSize(maxW, maxH);
                 Log.d("a", String.format("%d,%d", maxW, maxH));
-                transformTextures(0);
+                transformTextures(zoomMode);
             }
         }
 
