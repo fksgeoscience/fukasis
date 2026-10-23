@@ -406,11 +406,7 @@ if (isLine) {
                 expoTxt.setText(getString(R.string.exposure_format, ms));
 
                 // 2. ナノ秒（Camera2 API用）は大きな整数になるので (long) にキャストする
-                // カメラが受け付けない露出時間は受け付ける範囲に収める (表示も実際の値にする)
-                expo = cam.clampExposure((long) (ms * 1000000.0));
-                if (expo != (long) (ms * 1000000.0)) {
-                    expoTxt.setText(String.format("Exposure: %.2f ms (camera limit)", expo / 1000000.0));
-                }
+                expo = (long) (ms * 1000000.0);
 
                 cam.changeValueOfPreview(0, -100, expo, -1);
             }

@@ -316,11 +316,6 @@ public class Cam {
                         @Override
                         public void onConfigured(@NonNull CameraCaptureSession session) {
                             capSession = session;
-                            long maxExpo = camCharacteristics.get(CameraCharacteristics.SENSOR_INFO_EXPOSURE_TIME_RANGE)
-                                    .getUpper();
-                            long minExpo = camCharacteristics.get(CameraCharacteristics.SENSOR_INFO_EXPOSURE_TIME_RANGE)
-                                    .getLower();
-                            Log.d("a", "max expose time : " + maxExpo + "min expose time : " + minExpo);
                             capRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_OFF);
                             capRequestBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, 100000000L);
                             capRequestBuilder.set(CaptureRequest.SENSOR_SENSITIVITY, 3200);
@@ -356,13 +351,6 @@ public class Cam {
         Range<Integer> r = camCharacteristics != null
                 ? camCharacteristics.get(CameraCharacteristics.SENSOR_INFO_SENSITIVITY_RANGE) : null;
         return r != null ? r.clamp(iso) : iso;
-    }
-
-    // カメラが受け付ける範囲に収めた露出時間 (ns). カメラを開く前はそのまま返す
-    public long clampExposure(long ns) {
-        Range<Long> r = camCharacteristics != null
-                ? camCharacteristics.get(CameraCharacteristics.SENSOR_INFO_EXPOSURE_TIME_RANGE) : null;
-        return r != null ? r.clamp(ns) : ns;
     }
 
     // iso 50,64,80,100,
