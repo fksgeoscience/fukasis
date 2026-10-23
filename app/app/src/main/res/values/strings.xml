@@ -71,7 +71,6 @@
     <string name="iso_format" translatable="false">ISO:%1$d</string>
     <string name="exposure_label">Exposure:100 ms</string>
     <string name="exposure_format">Exposure: %1$s</string>
-    <string name="exposure_camera_limit">Exposure: %1$s (camera limit)</string>
     <string name="exposure_auto_measuring">Exposure: %1$s (auto, measuring…)</string>
     <string name="exposure_mode_dial">Dial</string>
     <string name="exposure_mode_ruler">Ruler</string>

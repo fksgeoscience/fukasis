@@ -24,7 +24,6 @@
     <string name="focus_format">フォーカス:%1$s</string>
     <string name="exposure_label">露光時間:100 ms</string>
     <string name="exposure_format">露光時間: %1$s</string>
-    <string name="exposure_camera_limit">露光時間: %1$s (カメラの限界)</string>
     <string name="exposure_auto_measuring">露光時間: %1$s (自動・測定中…)</string>
     <string name="exposure_mode_dial">ダイヤル</string>
     <string name="exposure_mode_ruler">目盛り</string>

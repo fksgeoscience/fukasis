@@ -707,25 +707,14 @@ public class Cam {
         }
     }
 
-    // カメラが受け付ける露光時間の範囲 (ns). カメラを開く前は null
-    public Range<Long> exposureRange() {
-        return camCharacteristics != null
-                ? camCharacteristics.get(CameraCharacteristics.SENSOR_INFO_EXPOSURE_TIME_RANGE) : null;
-    }
-
     // 自動露出: startNs から試し撮りを繰り返し, 一次光領域のピークがちょうどよくなる露光時間を
-    // minNs - maxNs (とカメラが受け付ける範囲) の中で探す. 試し撮りは保存しない.
+    // minNs - maxNs の中で探す. 試し撮りは保存しない.
     // 始められたら true. 経過と結果は listener に UI スレッドで届く
     public boolean startAutoExposure(long startNs, long minNs, long maxNs, int iso, float fd,
             AutoExposureListener listener) {
         if (camDev == null || capSession == null || rawImgReader == null || isCapturing || checkOnly
                 || whiteLevel <= 0) {
             return false;
-        }
-        Range<Long> range = exposureRange();
-        if (range != null) {
-            minNs = Math.max(minNs, range.getLower());
-            maxNs = Math.min(maxNs, range.getUpper());
         }
         try {
             capSession.abortCaptures();

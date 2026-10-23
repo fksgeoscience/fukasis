@@ -5,7 +5,6 @@ import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.text.InputType;
-import android.util.Range;
 import android.view.MotionEvent;
 import android.view.View;
 import android.widget.Button;
@@ -37,9 +36,6 @@ public class ExposureControls {
         boolean startAutoExposure(long startNs, long minNs, long maxNs, Cam.AutoExposureListener listener);
 
         void cancelAutoExposure();
-
-        // カメラが受け付ける露光時間の範囲 (ns). カメラを開く前は null
-        Range<Long> cameraExposureRange();
 
         void showStatus(Cam.StatusType type, String message);
     }
@@ -177,16 +173,9 @@ public class ExposureControls {
         dialPad.setVisibility(useRuler ? View.GONE : View.VISIBLE);
     }
 
-    // 手で動かせる範囲 (log10 ms). つまみの範囲とカメラが受け付ける範囲の重なり
+    // 手で動かせる範囲 (log10 ms). カメラが受け付ける範囲には狭めない
     private double[] range() {
-        double lo = ExposureScale.LOG_MIN;
-        double hi = ExposureScale.LOG_MAX;
-        Range<Long> camera = host.cameraExposureRange();
-        if (camera != null) {
-            lo = Math.max(lo, ExposureScale.nsToLog(camera.getLower()));
-            hi = Math.min(hi, ExposureScale.nsToLog(camera.getUpper()));
-        }
-        return new double[] { lo, Math.max(lo, hi) };
+        return new double[] { ExposureScale.LOG_MIN, ExposureScale.LOG_MAX };
     }
 
     // 露光時間を value (log10 ms) にする. source はそれを動かしたつまみ (なければ null).
@@ -203,10 +192,6 @@ public class ExposureControls {
             dial.setValue(log);
         }
         long next = ExposureScale.toNs(log);
-        Range<Long> camera = host.cameraExposureRange();
-        if (camera != null) {
-            next = camera.clamp(next);
-        }
         if (next != ns) {
             ns = next;
             host.onExposureChanged(ns);
@@ -215,13 +200,7 @@ public class ExposureControls {
     }
 
     private void updateText() {
-        String value = ExposureScale.format(ns / 1000000.0);
-        Range<Long> camera = host.cameraExposureRange();
-        boolean atCameraLimit = camera != null
-                && ((ns <= camera.getLower() && camera.getLower() > ExposureScale.toNs(ExposureScale.LOG_MIN))
-                        || (ns >= camera.getUpper() && camera.getUpper() < ExposureScale.toNs(ExposureScale.LOG_MAX)));
-        text.setText(activity.getString(atCameraLimit ? R.string.exposure_camera_limit : R.string.exposure_format,
-                value));
+        text.setText(activity.getString(R.string.exposure_format, ExposureScale.format(ns / 1000000.0)));
     }
 
     // ×2 / ÷2. 押すと 1 回, 長押しで連続

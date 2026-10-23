@@ -13,7 +13,6 @@ import android.media.AudioAttributes;
 import android.media.SoundPool;
 import android.net.Uri;
 import android.util.Log;
-import android.util.Range;
 import android.os.Bundle;
 import android.util.Size;
 import android.view.Surface;
@@ -417,11 +416,6 @@ if (isLine) {
             @Override
             public void cancelAutoExposure() {
                 cam.cancelAutoExposure();
-            }
-
-            @Override
-            public Range<Long> cameraExposureRange() {
-                return cam.exposureRange();
             }
 
             @Override
