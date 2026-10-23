@@ -137,22 +137,53 @@
                 android:textColor="#FFFFFF"
                 android:backgroundTint="#FF4081"
                 android:textAllCaps="false" /> -->
+            <!-- 露光時間. 値をタップすると数値で入力できる -->
             <TextView
                 android:id="@+id/expo_txt"
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:background="?attr/selectableItemBackground"
+                android:clickable="true"
+                android:focusable="true"
+                android:minHeight="40dp"
+                android:gravity="center_vertical"
                 android:text="@string/exposure_label" />
 
-            <Switch
-                android:id="@+id/expo_switch"
+            <!-- つまみの種類 (ダイヤル / 目盛り) と自動露出 -->
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:checked="false"
-                android:text="@string/switch_long" />
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
 
-            <Space
-                android:layout_width="match_parent"
-                android:layout_height="20dp" />
+                <RadioGroup
+                    android:id="@+id/expo_mode"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="horizontal">
+
+                    <RadioButton
+                        android:id="@+id/expo_mode_dial"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:checked="true"
+                        android:text="@string/exposure_mode_dial" />
+
+                    <RadioButton
+                        android:id="@+id/expo_mode_ruler"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/exposure_mode_ruler" />
+                </RadioGroup>
+
+                <Switch
+                    android:id="@+id/expo_auto"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:checked="false"
+                    android:text="@string/exposure_auto" />
+            </LinearLayout>
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -162,13 +193,44 @@
                 android:paddingTop="8dp"
                 android:paddingBottom="8dp">
 
-                <SeekBar
-                    android:id="@+id/expo_bar"
+                <Button
+                    android:id="@+id/expo_halve"
+                    style="@style/ExposureStepButton"
+                    android:layout_width="52dp"
+                    android:layout_height="64dp"
+                    android:text="@string/exposure_halve" />
+
+                <FrameLayout
                     android:layout_width="0dp"
-                    android:layout_height="wrap_content"
+                    android:layout_height="64dp"
                     android:layout_weight="1"
-                    android:max="100"
-                    android:min="0" />
+                    android:layout_marginStart="4dp"
+                    android:layout_marginEnd="4dp">
+
+                    <com.example.ssa.ExposureRulerView
+                        android:id="@+id/expo_ruler"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:visibility="gone" />
+
+                    <!-- 長押しするとダイヤル (expo_dial) が出る -->
+                    <TextView
+                        android:id="@+id/expo_dial_pad"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:background="@drawable/bg_exposure_dial_pad"
+                        android:clickable="true"
+                        android:focusable="true"
+                        android:gravity="center"
+                        android:text="@string/exposure_dial_hint" />
+                </FrameLayout>
+
+                <Button
+                    android:id="@+id/expo_double"
+                    style="@style/ExposureStepButton"
+                    android:layout_width="52dp"
+                    android:layout_height="64dp"
+                    android:text="@string/exposure_double" />
 
                 <androidx.appcompat.widget.AppCompatImageView
                     android:id="@+id/expo_lock"
@@ -383,5 +445,16 @@
         android:layout_height="1px"
         android:background="#FF0000" />
     </FrameLayout>
+
+    <!-- 露光時間のダイヤル. expo_dial_pad を長押ししている間だけ出る -->
+    <com.example.ssa.ExposureDialView
+        android:id="@+id/expo_dial"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:visibility="invisible"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

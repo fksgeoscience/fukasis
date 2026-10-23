@@ -40,6 +40,8 @@ public class SaturationChecker {
     public static class Result {
         public final int whiteLevel;
         public final int[] peak = new int[3];
+        // MIN_SATURATED_PIXELS 番目に明るい画素の値. ホットピクセル数個に引きずられないピーク
+        public final int[] level = new int[3];
         public final int[] saturatedPixels = new int[3];
         public final int[] pixels = new int[3];
 
@@ -93,6 +95,8 @@ public class SaturationChecker {
         int threshold = (int) Math.ceil(whiteLevel * SATURATION_RATIO);
 
         Result result = new Result(whiteLevel);
+        // チャンネルごとの明るい方から MIN_SATURATED_PIXELS 個 (昇順. [0] がその中で一番暗い)
+        int[][] top = new int[3][MIN_SATURATED_PIXELS];
         for (int y = y1; y < y2; y++) {
             for (int x = x1; x < x2; x++) {
                 int index = y * rowStride + x * 2;
@@ -105,11 +109,27 @@ public class SaturationChecker {
                 if (result.peak[ch] < val) {
                     result.peak[ch] = val;
                 }
+                if (top[ch][0] < val) {
+                    insertTop(top[ch], val);
+                }
                 if (threshold <= val) {
                     result.saturatedPixels[ch]++;
                 }
             }
         }
+        for (int ch = 0; ch < 3; ch++) {
+            result.level[ch] = result.pixels[ch] >= MIN_SATURATED_PIXELS ? top[ch][0] : result.peak[ch];
+        }
         return result;
+    }
+
+    // 昇順の top の一番小さい値を捨てて val を入れる
+    private static void insertTop(int[] top, int val) {
+        int i = 0;
+        while (i + 1 < top.length && top[i + 1] < val) {
+            top[i] = top[i + 1];
+            i++;
+        }
+        top[i] = val;
     }
 }

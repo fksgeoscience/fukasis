@@ -70,9 +70,26 @@
     <string name="focus_format">Focus:%1$s</string>
     <string name="iso_format" translatable="false">ISO:%1$d</string>
     <string name="exposure_label">Exposure:100 ms</string>
-    <string name="exposure_progress_format">Exposure:%1$d</string>
-    <string name="exposure_format">Exposure: %1$.2f ms</string>
-    <string name="switch_long">long</string>
+    <string name="exposure_format">Exposure: %1$s</string>
+    <string name="exposure_auto_measuring">Exposure: %1$s (auto, measuring…)</string>
+    <string name="exposure_mode_dial">Dial</string>
+    <string name="exposure_mode_ruler">Ruler</string>
+    <string name="exposure_auto">Auto</string>
+    <string name="exposure_dial_hint">Hold and turn</string>
+    <string name="exposure_dial_tap_hint">Press and hold, then turn your finger around the dial.</string>
+    <string name="exposure_halve" translatable="false">÷2</string>
+    <string name="exposure_double" translatable="false">×2</string>
+    <string name="exposure_input_title">Exposure time (ms)</string>
+    <string name="exposure_input_message">Enter a value from %1$s to %2$s.</string>
+    <string name="exposure_input_invalid">Enter a number.</string>
+    <string name="exposure_input_clamped">Set to %1$s to stay within the range.</string>
+    <string name="status_auto_exposure_measuring">Auto exposure: test shot at %1$s…</string>
+    <string name="status_auto_exposure_ok">Auto exposure: set to %1$s (peak %2$d%% of white level).</string>
+    <string name="status_auto_exposure_too_bright">Auto exposure: saturated even at the shortest exposure (%1$s). Lower the ISO.</string>
+    <string name="status_auto_exposure_too_dark">Auto exposure: still dark at the longest exposure (%1$s, peak %2$d%%). Raise the ISO.</string>
+    <string name="status_auto_exposure_not_converged">Auto exposure: could not settle. Using %1$s (peak %2$d%%).</string>
+    <string name="status_auto_exposure_failed">Auto exposure stopped. The exposure time was not changed.</string>
+    <string name="error_auto_exposure_busy">Auto exposure cannot start now. Wait until the camera is ready or the capture has finished.</string>
     <string name="zoom_for_focusing">ZOOM FOR FOCUSING</string>
     <string name="zoom_for_pointing">ZOOM FOR POINTING</string>
     <string name="unzoom">UNZOOM</string>
