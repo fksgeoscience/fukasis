@@ -88,6 +88,23 @@ public class SaturationCheckerTest {
     }
 
     @Test
+    public void levelIgnoresAFewHotPixels() {
+        ByteBuffer buff = newImage(100);
+        // G (GBRG の (偶数, 偶数)) にホットピクセル 3 個と, それより暗い明るめの画素
+        put(buff, 0, 0, 1000);
+        put(buff, 2, 0, 900);
+        put(buff, 4, 0, 800);
+        put(buff, 6, 0, 500);
+        put(buff, 8, 0, 400);
+        SaturationChecker.Result r = analyze(buff, SaturationChecker.CFA_GBRG);
+        assertEquals(1000, r.peak[SaturationChecker.G]);
+        // MIN_SATURATED_PIXELS (4) 番目に明るい値
+        assertEquals(500, r.level[SaturationChecker.G]);
+        assertEquals(100, r.level[SaturationChecker.R]);
+        assertEquals(100, r.level[SaturationChecker.B]);
+    }
+
+    @Test
     public void regionOutsideIsIgnored() {
         ByteBuffer buff = newImage(100);
         for (int x = 0; x < WIDTH; x++) {

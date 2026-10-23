@@ -13,6 +13,7 @@ import android.media.AudioAttributes;
 import android.media.SoundPool;
 import android.net.Uri;
 import android.util.Log;
+import android.util.Range;
 import android.os.Bundle;
 import android.util.Size;
 import android.view.Surface;
@@ -23,9 +24,7 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.SeekBar;
 import android.widget.TextView;
-import android.widget.Switch;
 import android.widget.FrameLayout;
-import android.widget.CompoundButton;
 import android.widget.Toast;
 
 import com.example.ssa.databinding.ActivityCapBinding;
@@ -62,11 +61,9 @@ public class CapActivity extends AppCompatActivity {
     private int iso = 3200; // iso
     private float fd = 1; // m?
     private int zoom = 0; // 0:noZoom 1:focusing 2:pointing
-    private boolean isLongExpo = false;
     private boolean isLine = true;
     private boolean isFocusLocked = false;
     private boolean isIsoLocked = false;
-    private boolean isExpoLocked = false;
     private boolean isLineLocked = false;
 
     private TextureView tv1;
@@ -82,6 +79,7 @@ public class CapActivity extends AppCompatActivity {
     private ActivityCapBinding binding;
 
     private Cam cam;
+    private ExposureControls exposureControls;
 
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
@@ -133,14 +131,9 @@ public class CapActivity extends AppCompatActivity {
         TextView isoTxt = binding.isoTxt;
         SeekBar isoBar = binding.isoBar;
         AppCompatImageView isoLock = binding.isoLock;
-        Switch expoSw = binding.expoSwitch;
-        TextView expoTxt = binding.expoTxt;
-        SeekBar expoBar = binding.expoBar;
-        AppCompatImageView expoLock = binding.expoLock;
         AppCompatImageView lineLock = binding.lineLock;
         focusTxt.setText(getString(R.string.focus_format, String.valueOf(focusBar.getProgress())));
         isoTxt.setText(getString(R.string.iso_format, isoBar.getProgress()));
-        expoTxt.setText(getString(R.string.exposure_progress_format, expoBar.getProgress()));
         Log.v("a", "executed onCreate            a");
 
         switchLine.setOnClickListener(new View.OnClickListener() {
@@ -230,16 +223,6 @@ if (isLine) {
                 }
             }
         });
-        expoSw.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
-            @Override
-            public void onCheckedChanged(CompoundButton btn, boolean b) {
-                if (b) {
-                    isLongExpo = true;
-                } else {
-                    isLongExpo = false;
-                }
-            }
-        });
         focusBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int i, boolean b) {
@@ -289,22 +272,6 @@ if (isLine) {
                     isoBar.setEnabled(true);
                     isoLock.setImageResource(R.drawable.ic_unlock);
                     isoLock.setAlpha(1.0f);
-                }
-            }
-        });
-
-        expoLock.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                isExpoLocked = !isExpoLocked;
-                if (isExpoLocked) {
-                    expoBar.setEnabled(false);
-                    expoLock.setImageResource(R.drawable.ic_lock);
-                    expoLock.setAlpha(0.5f);
-                } else {
-                    expoBar.setEnabled(true);
-                    expoLock.setImageResource(R.drawable.ic_unlock);
-                    expoLock.setAlpha(1.0f);
                 }
             }
         });
@@ -388,35 +355,8 @@ if (isLine) {
 
             @Override
             public void onStopTrackingTouch(SeekBar seekBar) {
-            }
-        });
-        expoBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            @Override
-            public void onProgressChanged(SeekBar seekBar, int i, boolean b) {
-                double ms;
-
-                if (isLongExpo) {
-                    ms = Math.pow(10.0, 2.0 + (double) i * 2.1461280356782 / 100.0);// log_10(30,000) = 4.4771212547197
-                } else {
-                    // min 0.04166 ms
-                    // 2.0(100ms) - -1.3802807343883 = 3.38028073439
-                    ms = Math.pow(10.0, -1.3802807343883 + (double) i * 3.38028073439 / 100.0);
-                }
-                // 1. ミリ秒は (long) にせず double のまま表示に使う（例：小数点以下 2 桁）
-                expoTxt.setText(getString(R.string.exposure_format, ms));
-
-                // 2. ナノ秒（Camera2 API用）は大きな整数になるので (long) にキャストする
-                expo = (long) (ms * 1000000.0);
-
-                cam.changeValueOfPreview(0, -100, expo, -1);
-            }
-
-            @Override
-            public void onStartTrackingTouch(SeekBar seekBar) {
-            }
-
-            @Override
-            public void onStopTrackingTouch(SeekBar seekBar) {
+                // 自動露出がオンなら, 新しい ISO で測り直す
+                exposureControls.onIsoChanged();
             }
         });
         lineBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
@@ -451,6 +391,44 @@ if (isLine) {
         // cam object (使うカメラは端末プロファイルで決める. 書かれていなければ RAW で撮れる背面カメラ)
         camId = DeviceProfiles.cameraId(this);
         cam = new Cam(this, camId, soundPool, alarmSound, shatterSound, tv1, tv2, captureStatusIcon);
+
+        // 露光時間 (ダイヤル / 目盛り, ×2 ÷2, 数値入力, 自動露出, ロック)
+        exposureControls = new ExposureControls(this, binding, new ExposureControls.Host() {
+            @Override
+            public void onExposureChanged(long ns) {
+                expo = ns;
+                cam.changeValueOfPreview(0, -100, expo, -1);
+            }
+
+            @Override
+            public boolean startAutoExposure(long startNs, long minNs, long maxNs,
+                    Cam.AutoExposureListener listener) {
+                if (!cam.startAutoExposure(startNs, minNs, maxNs, iso, fd, listener)) {
+                    return false;
+                }
+                // 測り終わったら Cam がボタンを戻す
+                capBtn.setAlpha(0.5f);
+                capBtn.setEnabled(false);
+                satBtn.setAlpha(0.5f);
+                satBtn.setEnabled(false);
+                return true;
+            }
+
+            @Override
+            public void cancelAutoExposure() {
+                cam.cancelAutoExposure();
+            }
+
+            @Override
+            public Range<Long> cameraExposureRange() {
+                return cam.exposureRange();
+            }
+
+            @Override
+            public void showStatus(Cam.StatusType type, String message) {
+                Cam.setStatus(type, message, captureStatusIcon, indicator);
+            }
+        });
 
         // request camera permission (カメラを開くのは onResume で行う)
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {

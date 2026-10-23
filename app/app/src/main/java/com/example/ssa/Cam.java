@@ -40,6 +40,7 @@ import com.example.ssa.databinding.ActivityCapBinding;
 import android.content.Context;
 import android.graphics.ImageFormat;
 import android.hardware.camera2.*;
+import android.hardware.camera2.params.BlackLevelPattern;
 import android.hardware.camera2.params.StreamConfigurationMap;
 import android.media.Image;
 import android.media.ImageReader;
@@ -113,6 +114,22 @@ public class Cam {
     private int whiteLevel = 0; // 0 なら不明 (チェックしない)
     private volatile boolean checkOnly = false; // 試し撮り中 (保存もスタックもしない)
     private int saturatedFrames = 0; // 今の capture sequence で白飛びしていた枚数
+    private double blackLevel = 0;
+
+    // 自動露出 (試し撮りを繰り返して露光時間を決める). 結果は UI スレッドで届く
+    public interface AutoExposureListener {
+        // 次の試し撮りを始めた
+        void onAutoExposureShot(long ns);
+
+        // 終わった. outcome が null なら失敗か中断 (露光時間は変えない)
+        void onAutoExposureFinished(AutoExposure.Outcome outcome, long ns, double fill);
+    }
+
+    private volatile AutoExposure metering; // 測っていないときは null
+    private volatile boolean meteringCancelled = false;
+    private AutoExposureListener meteringListener;
+    private int meteringIso;
+    private float meteringFd;
 
     // constructor
     public Cam(Activity activity, String camId, SoundPool soundPool, int alarmSound, int shatterSound) {
@@ -227,6 +244,12 @@ public class Cam {
             maxH = largestRaw.getHeight();
             Integer white = camCharacteristics.get(CameraCharacteristics.SENSOR_INFO_WHITE_LEVEL);
             whiteLevel = (white != null) ? white : 0;
+            BlackLevelPattern black = camCharacteristics.get(CameraCharacteristics.SENSOR_BLACK_LEVEL_PATTERN);
+            blackLevel = 0;
+            if (black != null) {
+                blackLevel = (black.getOffsetForIndex(0, 0) + black.getOffsetForIndex(1, 0)
+                        + black.getOffsetForIndex(0, 1) + black.getOffsetForIndex(1, 1)) / 4.0;
+            }
             rawImgReader = ImageReader.newInstance(maxW, maxH, ImageFormat.RAW_SENSOR, 2);
             rawImgReader.setOnImageAvailableListener(onRawImageAvailableListener, backgroundHandler);
 
@@ -270,6 +293,15 @@ public class Cam {
             // 撮影途中で画面を離れたらシーケンスは中断扱い
             isCapturing = false;
             postError("撮影が中断されました");
+        }
+        if (metering != null) {
+            // 自動露出の途中で画面を離れたら中断扱い (プレビューはこの後閉じるので再開しない)
+            final AutoExposureListener listener = meteringListener;
+            metering = null;
+            meteringListener = null;
+            if (listener != null) {
+                listener.onAutoExposureFinished(null, 0, 0);
+            }
         }
         checkOnly = false;
         synchronized (this) {
@@ -358,6 +390,10 @@ public class Cam {
     // 320,400,500,640,
     // 800,1600,3200
     public void changeValueOfPreview(int iso, float fd, long expo, int zoom) {
+        // カメラを開く前 (プレビューがまだない) は何もしない
+        if (capRequestBuilder == null || capSession == null) {
+            return;
+        }
 
         if (iso != 0) {
             capRequestBuilder.set(CaptureRequest.SENSOR_SENSITIVITY, iso);
@@ -671,6 +707,122 @@ public class Cam {
         }
     }
 
+    // カメラが受け付ける露光時間の範囲 (ns). カメラを開く前は null
+    public Range<Long> exposureRange() {
+        return camCharacteristics != null
+                ? camCharacteristics.get(CameraCharacteristics.SENSOR_INFO_EXPOSURE_TIME_RANGE) : null;
+    }
+
+    // 自動露出: startNs から試し撮りを繰り返し, 一次光領域のピークがちょうどよくなる露光時間を
+    // minNs - maxNs (とカメラが受け付ける範囲) の中で探す. 試し撮りは保存しない.
+    // 始められたら true. 経過と結果は listener に UI スレッドで届く
+    public boolean startAutoExposure(long startNs, long minNs, long maxNs, int iso, float fd,
+            AutoExposureListener listener) {
+        if (camDev == null || capSession == null || rawImgReader == null || isCapturing || checkOnly
+                || whiteLevel <= 0) {
+            return false;
+        }
+        Range<Long> range = exposureRange();
+        if (range != null) {
+            minNs = Math.max(minNs, range.getLower());
+            maxNs = Math.min(maxNs, range.getUpper());
+        }
+        try {
+            capSession.abortCaptures();
+        } catch (CameraAccessException | IllegalStateException e) {
+            e.printStackTrace();
+            return false;
+        }
+        metering = new AutoExposure(startNs, minNs, maxNs);
+        meteringCancelled = false;
+        meteringListener = listener;
+        meteringIso = iso;
+        meteringFd = fd;
+        checkOnly = true;
+        if (!shootMetering()) {
+            finishMetering(null);
+        }
+        return true;
+    }
+
+    // 自動露出をやめる. 今撮っている 1 枚が終わったら, 露光時間を変えずに終わる
+    public void cancelAutoExposure() {
+        meteringCancelled = true;
+    }
+
+    private boolean shootMetering() {
+        AutoExposure m = metering;
+        if (m == null || capSession == null) {
+            return false;
+        }
+        final long ns = m.exposureNs();
+        try {
+            CaptureRequest.Builder builder = camDev.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE);
+            builder.addTarget(rawImgReader.getSurface());
+            builder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_OFF);
+            builder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, ns);
+            builder.set(CaptureRequest.SENSOR_SENSITIVITY, meteringIso);
+            builder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_OFF);
+            builder.set(CaptureRequest.LENS_FOCUS_DISTANCE, meteringFd);
+            capSession.capture(builder.build(), checkCallback, backgroundHandler);
+        } catch (CameraAccessException | IllegalStateException e) {
+            e.printStackTrace();
+            return false;
+        }
+        final AutoExposureListener listener = meteringListener;
+        if (listener != null) {
+            activity.runOnUiThread(() -> listener.onAutoExposureShot(ns));
+        }
+        return true;
+    }
+
+    private void onMeteringImage(SaturationChecker.Result result) {
+        AutoExposure m = metering;
+        if (m == null) {
+            return;
+        }
+        if (result == null || meteringCancelled) {
+            finishMetering(null);
+            return;
+        }
+        if (m.feed(result.anySaturated(), AutoExposure.fill(result, blackLevel))) {
+            if (!shootMetering()) {
+                finishMetering(null);
+            }
+            return;
+        }
+        finishMetering(m);
+    }
+
+    // 自動露出の後始末 (m が null なら失敗か中断). プレビューを決まった露光時間で再開し, ボタンを戻す
+    private void finishMetering(final AutoExposure m) {
+        final AutoExposureListener listener = meteringListener;
+        metering = null;
+        meteringListener = null;
+        checkOnly = false;
+        try {
+            if (capSession != null) {
+                if (m != null) {
+                    capRequestBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, m.exposureNs());
+                }
+                capSession.setRepeatingRequest(capRequestBuilder.build(), null, backgroundHandler);
+            }
+        } catch (CameraAccessException | IllegalStateException e) {
+            e.printStackTrace();
+        }
+        activity.runOnUiThread(() -> {
+            if (listener != null) {
+                if (m != null) {
+                    listener.onAutoExposureFinished(m.outcome(), m.exposureNs(), m.fill());
+                } else {
+                    listener.onAutoExposureFinished(null, 0, 0);
+                }
+            }
+            enableButton(R.id.cap);
+            enableButton(R.id.sat_check);
+        });
+    }
+
     // 試し撮りの後始末。止まっているプレビューを再開し, 結果を表示してボタンを戻す
     private void finishSaturationCheck(final SaturationChecker.Result result) {
         checkOnly = false;
@@ -702,7 +854,11 @@ public class Cam {
         public void onCaptureFailed(@NonNull CameraCaptureSession session, @NonNull CaptureRequest request,
                 @NonNull CaptureFailure failure) {
             if (checkOnly) {
-                finishSaturationCheck(null);
+                if (metering != null) {
+                    finishMetering(null);
+                } else {
+                    finishSaturationCheck(null);
+                }
             }
         }
     };
@@ -849,7 +1005,12 @@ public class Cam {
                 if (img != null) {
                     img.close();
                 }
-                finishSaturationCheck(result);
+                if (metering != null) {
+                    // 自動露出の試し撮り
+                    onMeteringImage(result);
+                } else {
+                    finishSaturationCheck(result);
+                }
                 return;
             }
             if (img == null) {
