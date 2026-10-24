@@ -21,10 +21,11 @@ import com.google.android.material.color.MaterialColors;
 // 中央の線が今の値
 public class ExposureRulerView extends View implements ExposureKnob {
 
-    // 10 倍あたりの幅
+    // 10 倍あたりの幅. 幅が狭いときは, 10 倍分が帯の 9 割に収まるまで縮める (MIN_DECADE_DP まで)
     private static final float DECADE_DP = 180f;
+    private static final float MIN_DECADE_DP = 120f;
 
-    private final float pxPerDecade;
+    private float pxPerDecade;
     private final float density;
     private final Paint tickPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint labelPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -92,6 +93,13 @@ public class ExposureRulerView extends View implements ExposureKnob {
         knob.setValue(log);
         updateDescription();
         invalidate();
+    }
+
+    @Override
+    protected void onSizeChanged(int w, int h, int oldw, int oldh) {
+        super.onSizeChanged(w, h, oldw, oldh);
+        scroller.forceFinished(true);
+        pxPerDecade = Math.max(MIN_DECADE_DP * density, Math.min(DECADE_DP * density, w * 0.9f));
     }
 
     @Override

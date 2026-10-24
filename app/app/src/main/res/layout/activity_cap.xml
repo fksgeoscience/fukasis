@@ -149,63 +149,54 @@
                 android:gravity="center_vertical"
                 android:text="@string/exposure_label" />
 
-            <!-- つまみの種類 (ダイヤル / 目盛り) と自動露出 -->
-            <LinearLayout
+            <!-- 縦向きでは操作パネルの幅が 200dp ほどしかないので, 横に詰め込まず 1 段ずつ並べる -->
+
+            <!-- つまみの種類 (ダイヤル / 目盛り). 幅を半分ずつ使う -->
+            <com.google.android.material.button.MaterialButtonToggleGroup
+                android:id="@+id/expo_mode"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical">
+                app:checkedButton="@id/expo_mode_dial"
+                app:selectionRequired="true"
+                app:singleSelection="true">
 
-                <RadioGroup
-                    android:id="@+id/expo_mode"
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/expo_mode_dial"
+                    style="@style/ExposureModeButton"
                     android:layout_width="0dp"
-                    android:layout_height="wrap_content"
+                    android:layout_height="48dp"
                     android:layout_weight="1"
-                    android:orientation="horizontal">
+                    android:text="@string/exposure_mode_dial" />
 
-                    <RadioButton
-                        android:id="@+id/expo_mode_dial"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:checked="true"
-                        android:text="@string/exposure_mode_dial" />
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/expo_mode_ruler"
+                    style="@style/ExposureModeButton"
+                    android:layout_width="0dp"
+                    android:layout_height="48dp"
+                    android:layout_weight="1"
+                    android:text="@string/exposure_mode_ruler" />
+            </com.google.android.material.button.MaterialButtonToggleGroup>
 
-                    <RadioButton
-                        android:id="@+id/expo_mode_ruler"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="@string/exposure_mode_ruler" />
-                </RadioGroup>
+            <Switch
+                android:id="@+id/expo_auto"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:minHeight="48dp"
+                android:checked="false"
+                android:text="@string/exposure_auto" />
 
-                <Switch
-                    android:id="@+id/expo_auto"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:checked="false"
-                    android:text="@string/exposure_auto" />
-            </LinearLayout>
-
+            <!-- つまみ本体. ロック以外の幅を全部使う -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
                 android:gravity="center_vertical"
-                android:paddingTop="8dp"
-                android:paddingBottom="8dp">
-
-                <Button
-                    android:id="@+id/expo_halve"
-                    style="@style/ExposureStepButton"
-                    android:layout_width="52dp"
-                    android:layout_height="64dp"
-                    android:text="@string/exposure_halve" />
+                android:paddingTop="4dp">
 
                 <FrameLayout
                     android:layout_width="0dp"
                     android:layout_height="64dp"
-                    android:layout_weight="1"
-                    android:layout_marginStart="4dp"
-                    android:layout_marginEnd="4dp">
+                    android:layout_weight="1">
 
                     <com.example.ssa.ExposureRulerView
                         android:id="@+id/expo_ruler"
@@ -222,15 +213,10 @@
                         android:clickable="true"
                         android:focusable="true"
                         android:gravity="center"
+                        android:paddingStart="8dp"
+                        android:paddingEnd="8dp"
                         android:text="@string/exposure_dial_hint" />
                 </FrameLayout>
-
-                <Button
-                    android:id="@+id/expo_double"
-                    style="@style/ExposureStepButton"
-                    android:layout_width="52dp"
-                    android:layout_height="64dp"
-                    android:text="@string/exposure_double" />
 
                 <androidx.appcompat.widget.AppCompatImageView
                     android:id="@+id/expo_lock"
@@ -241,6 +227,33 @@
                     android:focusable="true"
                     android:padding="10dp"
                     android:src="@drawable/ic_unlock" />
+            </LinearLayout>
+
+            <!-- ÷2 / ×2. 幅を半分ずつ使う -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:paddingTop="8dp"
+                android:paddingBottom="8dp">
+
+                <Button
+                    android:id="@+id/expo_halve"
+                    style="@style/ExposureStepButton"
+                    android:layout_width="0dp"
+                    android:layout_height="48dp"
+                    android:layout_weight="1"
+                    android:layout_marginEnd="4dp"
+                    android:text="@string/exposure_halve" />
+
+                <Button
+                    android:id="@+id/expo_double"
+                    style="@style/ExposureStepButton"
+                    android:layout_width="0dp"
+                    android:layout_height="48dp"
+                    android:layout_weight="1"
+                    android:layout_marginStart="4dp"
+                    android:text="@string/exposure_double" />
             </LinearLayout>
 
             <Space
