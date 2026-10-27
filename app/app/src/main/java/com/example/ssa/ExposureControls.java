@@ -116,9 +116,12 @@ public class ExposureControls {
         });
 
         boolean rulerMode = MODE_RULER.equals(prefs().getString(KEY_MODE, MODE_DIAL));
-        (rulerMode ? binding.expoModeRuler : binding.expoModeDial).setChecked(true);
+        binding.expoMode.check(rulerMode ? R.id.expo_mode_ruler : R.id.expo_mode_dial);
         setRulerMode(rulerMode);
-        binding.expoMode.setOnCheckedChangeListener((group, checkedId) -> {
+        binding.expoMode.addOnButtonCheckedListener((group, checkedId, isChecked) -> {
+            if (!isChecked) {
+                return;
+            }
             boolean useRuler = checkedId == R.id.expo_mode_ruler;
             setRulerMode(useRuler);
             prefs().edit().putString(KEY_MODE, useRuler ? MODE_RULER : MODE_DIAL).apply();

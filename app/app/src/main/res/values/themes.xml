@@ -31,6 +31,18 @@
         <item name="android:insetBottom">0dp</item>
         <item name="android:textSize">15sp</item>
     </style>
+    <!-- 露光時間のつまみの種類 (ダイヤル / 目盛り) の切り替え. 狭い幅でも 1 行に収める -->
+    <style name="ExposureModeButton" parent="Widget.MaterialComponents.Button.OutlinedButton">
+        <item name="android:minWidth">0dp</item>
+        <item name="android:minHeight">0dp</item>
+        <item name="android:paddingStart">4dp</item>
+        <item name="android:paddingEnd">4dp</item>
+        <item name="android:insetTop">0dp</item>
+        <item name="android:insetBottom">0dp</item>
+        <item name="android:textSize">14sp</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:maxLines">1</item>
+    </style>
     <!-- Base application theme. -->
     <style name="Base.Theme.SSA" parent="Theme.Material3.DayNight.NoActionBar">
         <!-- Customize your light theme here. -->
