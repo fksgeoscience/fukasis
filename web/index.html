@@ -258,12 +258,57 @@
             <div class="table-wrap"><table id="graph-table"></table></div>
           </details>
         </div>
+        <div class="card" id="solar-card" hidden>
+          <h2 data-i18n="solar.title"></h2>
+          <p class="note" data-i18n="solar.lead"></p>
+          <div class="row">
+            <label
+              ><span data-i18n="solar.series"></span>
+              <select id="solar-series"></select
+            ></label>
+            <label
+              ><span data-i18n="solar.range"></span>
+              <input type="number" id="solar-min" class="narrow" step="1" value="450" /> –
+              <input type="number" id="solar-max" class="narrow" step="1" value="670" /> nm</label
+            >
+            <label
+              ><span data-i18n="solar.blueCut"></span>
+              <input type="number" id="solar-blue-cut" class="narrow" step="1" value="500" /> nm</label
+            >
+          </div>
+          <div class="row" style="margin-top: 8px">
+            <span class="note" data-i18n="solar.exposure"></span>
+            <label>ISO <input type="number" id="solar-iso" class="narrow" min="0" step="1" /></label>
+            <label
+              ><span data-i18n="solar.exposureMs"></span> <input type="number" id="solar-exp" class="narrow" min="0" step="any"
+            /></label>
+            <label
+              ><span data-i18n="solar.frames"></span> <input type="number" id="solar-frames" class="narrow" min="1" step="1"
+            /></label>
+            <label
+              ><span data-i18n="solar.gain"></span> <input type="text" id="solar-gain" class="narrow"
+            /></label>
+          </div>
+          <div class="row" style="margin-top: 12px">
+            <button class="primary" id="solar-run" data-i18n="solar.run"></button>
+          </div>
+          <div id="solar-message"></div>
+          <div id="solar-result" hidden>
+            <p class="stats" id="solar-stats"></p>
+            <div id="solar-chart" class="chart compact"></div>
+            <p class="note" data-i18n="solar.chartNote"></p>
+            <div class="row" style="margin-top: 10px">
+              <button id="solar-save" data-i18n="solar.save"></button>
+            </div>
+          </div>
+        </div>
       </section>
     </main>
 
     <div id="toast" role="status"></div>
 
     <script src="js/core.js"></script>
+    <script src="js/solar.js"></script>
     <script src="js/i18n.js"></script>
     <script src="js/chart.js"></script>
     <script src="js/viewer.js"></script>

@@ -91,7 +91,7 @@ jobs:
           echo "version=$v" >> "$GITHUB_OUTPUT"
       # 公開する前に, テストが通っていることを確かめる
       - name: Test (web, npm)
-        run: node --test web/test/core.test.js web/test/server.test.js npm/test/npm.test.js
+        run: node --test web/test/core.test.js web/test/server.test.js web/test/solar.test.js npm/test/npm.test.js
       - name: Test (cli)
         working-directory: cli
         run: cargo test --locked

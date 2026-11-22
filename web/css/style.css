@@ -249,6 +249,10 @@ input[type='number'] {
   width: 96px;
 }
 
+input.narrow {
+  width: 76px;
+}
+
 input[type='file'] {
   max-width: 100%;
   font-size: 12px;

@@ -31,7 +31,7 @@
 - 手元で確かめられるテスト:
 
   ```bash
-  node --test web/test/core.test.js web/test/server.test.js npm/test/npm.test.js
+  node --test web/test/core.test.js web/test/server.test.js web/test/solar.test.js npm/test/npm.test.js
   (cd cli && cargo test --locked)
   ```
 

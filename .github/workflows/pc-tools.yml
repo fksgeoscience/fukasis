@@ -29,7 +29,7 @@ jobs:
       - name: Node version
         run: node --version
       - name: Test
-        run: node --test web/test/core.test.js web/test/server.test.js
+        run: node --test web/test/core.test.js web/test/server.test.js web/test/solar.test.js
       # npm で配るコマンドライン版の起動役と, パッケージの組み立て
       - name: Test (npm packaging)
         run: node --test npm/test/npm.test.js
