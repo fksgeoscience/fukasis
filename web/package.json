@@ -30,7 +30,7 @@
   ],
   "scripts": {
     "start": "node bin/fukasis-web.js --open",
-    "test": "node --test test/core.test.js"
+    "test": "node --test test/core.test.js test/solar.test.js"
   },
   "engines": {
     "node": ">=18"

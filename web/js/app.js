@@ -832,7 +832,7 @@
   // ---------------------------------------------------------------- graph
 
   const TABLE_ROWS = 1000;
-  const graph = { files: [] }; // {name, x, y, colorIndex}. x, y はファイルに書かれていた順
+  const graph = { files: [] }; // {name, x, y, header, colorIndex}. x, y はファイルに書かれていた順
   const graphChart = window.FukasisChart.create($('graph-chart'));
   let graphShown = []; // 異常値を除いたあとの, 実際に描いている系列
 
@@ -849,7 +849,7 @@
     // 色は系列ごとに固定する (ほかの系列を消しても色が変わらないように, 空いている番号を使う)
     let colorIndex = 0;
     while (graph.files.some((f) => f.colorIndex === colorIndex)) colorIndex++;
-    graph.files.push({ name, x: parsed.x, y: parsed.y, colorIndex });
+    graph.files.push({ name, x: parsed.x, y: parsed.y, header: parsed.header, colorIndex });
     refreshGraph();
     return true;
   }
@@ -891,6 +891,7 @@
     select.selectedIndex = selected;
     select.hidden = graphShown.length < 2;
     renderGraphTable();
+    refreshSolarSeries();
   }
 
   function renderGraphTable() {
@@ -932,7 +933,128 @@
     graphChart.toBlob((blob) => download('spectrum.png', blob));
   });
   $('graph-table-series').addEventListener('change', renderGraphTable);
-  redrawers.graph = () => graphChart.redraw();
+  redrawers.graph = () => {
+    graphChart.redraw();
+    solarChart.redraw();
+  };
+
+  // ---------------------------------------------------------------- 太陽の温度推定 (graph タブの中)
+
+  const solar = window.FukasisSolar;
+  const solarChart = window.FukasisChart.create($('solar-chart'));
+  let solarResult = null; // {result, info, name}
+  let solarFile = null; // 露出などの欄を埋めたときのファイル (選び直したときだけ埋め直す)
+
+  // 開いているスペクトルを選択肢にする. 選んでいるものが変わったら, 観測の情報から ISO と露出を入れ直す
+  function refreshSolarSeries() {
+    const select = $('solar-series');
+    const previous = solarFile;
+    select.textContent = '';
+    graph.files.forEach((file) => {
+      const option = document.createElement('option');
+      option.textContent = file.name;
+      select.append(option);
+    });
+    const keep = previous ? graph.files.indexOf(previous) : -1;
+    select.selectedIndex = keep >= 0 ? keep : graph.files.length - 1;
+    $('solar-card').hidden = graph.files.length === 0;
+    fillSolarExposure();
+    if (solarResult && !graph.files.includes(solarResult.file)) clearSolarResult();
+  }
+
+  function fillSolarExposure() {
+    const file = graph.files[$('solar-series').selectedIndex];
+    if (!file || file === solarFile) return;
+    solarFile = file;
+    const exp = solar.parseExposure(file.header);
+    const put = (id, v) => ($(id).value = v === null || v === undefined ? '' : v);
+    put('solar-iso', exp.iso);
+    put('solar-exp', exp.exposureMs);
+    put('solar-frames', exp.frames);
+    put('solar-gain', exp.gain);
+  }
+
+  function clearSolarResult() {
+    solarResult = null;
+    $('solar-result').hidden = true;
+    setMessages($('solar-message'), 'warning', []);
+  }
+
+  const kelvin = (v) => (Number.isFinite(v) ? Math.round(v).toLocaleString('en-US') : '—');
+
+  function runSolar() {
+    const file = graph.files[$('solar-series').selectedIndex];
+    if (!file) return;
+    const numberOf = (id) => {
+      const v = $(id).value.trim();
+      return v === '' ? null : Number(v);
+    };
+    const options = {
+      minNm: numberOf('solar-min') ?? solar.DEFAULTS.minNm,
+      maxNm: numberOf('solar-max') ?? solar.DEFAULTS.maxNm,
+      blueCutNm: numberOf('solar-blue-cut') ?? solar.DEFAULTS.blueCutNm,
+    };
+    const shown = core.filter(file.x, file.y, $('graph-outliers').checked);
+    let result;
+    try {
+      result = solar.estimate(shown.wavelength, shown.intensity, options);
+    } catch (e) {
+      clearSolarResult();
+      setMessages($('solar-message'), 'error', [t('solar.error.' + (e.code || 'other'), e.detail || e.message)]);
+      return;
+    }
+    const info = {
+      source: file.name,
+      header: file.header,
+      iso: numberOf('solar-iso'),
+      exposureMs: numberOf('solar-exp'),
+      frames: numberOf('solar-frames'),
+      gain: $('solar-gain').value.trim(),
+    };
+    solarResult = { result, info, file };
+
+    const warnings = [];
+    if ((file.header || '').includes(core.NO_SENSITIVITY_MARK)) warnings.push(t('solar.warn.noSensitivity'));
+    if (result.full.atBoundary) warnings.push(t('solar.warn.boundary', solar.DEFAULTS.tMin, solar.DEFAULTS.tMax));
+    if (result.wien.atEdge) warnings.push(t('solar.warn.wienEdge'));
+    if (!result.red) warnings.push(t('solar.warn.noRed', options.blueCutNm));
+    if (info.iso === null || info.exposureMs === null) warnings.push(t('solar.warn.noExposure'));
+    setMessages($('solar-message'), 'warning', warnings);
+
+    const r = result;
+    const lines = [
+      t('solar.resultPlanck', kelvin(r.full.temperature), kelvin(r.full.sigma), r.full.n),
+      r.red ? t('solar.resultRed', options.blueCutNm, kelvin(r.red.temperature), kelvin(r.red.sigma)) : null,
+      r.red ? t('solar.resultSystematic', (r.systematic >= 0 ? '+' : '−') + kelvin(Math.abs(r.systematic))) : null,
+      t('solar.resultWien', r.wien.lambdaMax.toFixed(1), kelvin(r.wien.temperature)),
+      t('solar.resultReference', kelvin(solar.SUN_TEFF), (r.full.temperature >= solar.SUN_TEFF ? '+' : '−') + kelvin(Math.abs(r.full.temperature - solar.SUN_TEFF))),
+    ];
+    $('solar-stats').textContent = lines.filter(Boolean).join('\n');
+
+    // 実測 (範囲内の全点) と当てはめた曲線を重ねる. 縦の大きさは実測のまま
+    const p = r.points;
+    const series = [
+      { name: t('solar.seriesMeasured'), x: p.x, y: p.y, colorIndex: file.colorIndex },
+      { name: t('solar.seriesFit', kelvin(r.full.temperature)), x: p.x, y: p.x.map(r.model), colorIndex: (file.colorIndex + 1) % 8 },
+    ];
+    if (r.modelRed) {
+      const rx = p.x.filter((nm) => nm >= options.blueCutNm);
+      series.push({ name: t('solar.seriesFitRed', kelvin(r.red.temperature)), x: rx, y: rx.map(r.modelRed), colorIndex: (file.colorIndex + 2) % 8 });
+    }
+    $('solar-result').hidden = false;
+    solarChart.setSeries(series);
+    solarChart.setReferenceLines(r.masks.map((m) => ({ nm: m.nm, label: m.label })));
+  }
+
+  $('solar-series').addEventListener('change', () => {
+    fillSolarExposure();
+    clearSolarResult();
+  });
+  $('solar-run').addEventListener('click', runSolar);
+  $('solar-save').addEventListener('click', () => {
+    if (!solarResult) return;
+    download(solarResult.info.source + '_temperature.csv', solar.toCsv(solarResult.result, solarResult.info), 'text/csv');
+  });
 
   // ---------------------------------------------------------------- サンプルデータ
 
@@ -988,6 +1110,7 @@
     refreshCsv();
     refreshGraph();
     csvChart.redraw();
+    if (solarResult) runSolar();
   }
 
   $('lang-btn').addEventListener('click', () => window.I18n.setLang(window.I18n.getLang() === 'ja' ? 'en' : 'ja'));
@@ -997,7 +1120,7 @@
   function applyTheme(theme) {
     if (theme) document.documentElement.dataset.theme = theme;
     [darkViewer, calibViewer, csvViewer].forEach((v) => v.redraw());
-    [csvChart, graphChart].forEach((c) => c.redraw());
+    [csvChart, graphChart, solarChart].forEach((c) => c.redraw());
   }
   $('theme-btn').addEventListener('click', () => {
     const current =

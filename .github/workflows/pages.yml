@@ -35,7 +35,7 @@ jobs:
       - uses: actions/checkout@v7
       # 載せる前に, テストが通っていることを確かめる
       - name: Test
-        run: node --test web/test/core.test.js web/test/server.test.js
+        run: node --test web/test/core.test.js web/test/server.test.js web/test/solar.test.js
       # ページに要るものだけを置く (bin/ や test/ は載せない)
       - name: Collect the site
         run: |
